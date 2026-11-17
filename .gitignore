@@ -1,5 +1,8 @@
-# Compiled binary (built by build.sh)
+# Build output
+/.build/
 /WinterIsComing
+/WinterIsComing.app/
+/.swiftpm/
 
 # Temporary / editor files
 *.new
