@@ -10,7 +10,7 @@ public struct SnowField {
     public private(set) var minX: Double
     public private(set) var topY: Double
     public private(set) var width: Double
-    public let maxH: Double
+    public private(set) var maxH: Double
     public let seed: UInt64
     /// Radius of the window's top corners (0 for the Dock and the ground)
     public let cornerRadius: Double
@@ -194,6 +194,15 @@ public struct SnowField {
 
     public mutating func clear() {
         for i in 0..<h.count { h[i] = 0 }
+        version &+= 1
+    }
+
+    /// Change how high this pile may grow (a user preference). Snow above the new limit is removed.
+    public mutating func setMaxH(_ newMaxH: Double) {
+        guard newMaxH != maxH else { return }
+        maxH = newMaxH
+        (caps, catchFactor, base) = SnowField.makeProfile(count: h.count, maxH: maxH, seed: seed, origin: noiseOrigin, cornerRadius: cornerRadius)
+        for j in 0..<h.count where h[j] > caps[j] { h[j] = caps[j] }
         version &+= 1
     }
 

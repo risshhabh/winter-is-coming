@@ -99,6 +99,15 @@ public final class SurfaceManager {
     public private(set) var skippedUpdates = 0
     /// Corner radius given to new window surfaces
     public var cornerRadius = 0.0
+    /// Fraction of the built-in maximum pile heights (a user preference), applied to every pile
+    public var heightScale = 1.0 {
+        didSet {
+            guard heightScale != oldValue, oldValue > 0 else { return }
+            var all = Array(byID.values) + grounds
+            if let d = dock { all.append(d) }
+            for s in all { s.field.setMaxH(s.field.maxH / oldValue * heightScale) }
+        }
+    }
 
     private var byID: [Int: Surface] = [:]
     private var hidden: [Int: Surface] = [:]
@@ -149,7 +158,7 @@ public final class SurfaceManager {
                 newGrounds.append(g)
             } else {
                 let field = SnowField(minX: d.rect.minX, topY: d.rect.minY, width: d.rect.width,
-                                      maxH: SurfaceManager.groundPileMax,
+                                      maxH: SurfaceManager.groundPileMax * heightScale,
                                       seed: seed ^ 0x6001 ^ (UInt64(truncatingIfNeeded: d.id) &* 0x9E37))
                 newGrounds.append(Surface(id: id, kind: .ground, field: field, rect: rect))
             }
@@ -230,7 +239,7 @@ public final class SurfaceManager {
                 s.rect = r
                 scratch.append(s)
             } else {
-                let field = SnowField(minX: r.minX, topY: r.maxY, width: r.width, maxH: SurfaceManager.windowPileMax,
+                let field = SnowField(minX: r.minX, topY: r.maxY, width: r.width, maxH: SurfaceManager.windowPileMax * heightScale,
                                       seed: seed ^ (UInt64(truncatingIfNeeded: info.id) &* 0x9E37_79B9),
                                       cornerRadius: cornerRadius)
                 let s = Surface(id: info.id, kind: .window, field: field, rect: r)
@@ -305,7 +314,7 @@ public final class SurfaceManager {
             d.field.move(minX: r.minX, topY: r.maxY)
             d.rect = r
         } else {
-            let field = SnowField(minX: r.minX, topY: r.maxY, width: r.width, maxH: SurfaceManager.dockPileMax,
+            let field = SnowField(minX: r.minX, topY: r.maxY, width: r.width, maxH: SurfaceManager.dockPileMax * heightScale,
                                   seed: seed ^ 0xD0C4)
             dock = Surface(id: SurfaceManager.dockID, kind: .dock, field: field, rect: r)
         }

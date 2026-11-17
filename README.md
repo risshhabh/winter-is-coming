@@ -2,87 +2,132 @@
 
 Let it snow on your Mac! ☃️
 
-Snow falls on your desktop, drifts on the wind and piles up on your windows and Dock. Every flake is drawn in code.
+Snow falls on your desktop, drifts on the wind and piles up on your windows and Dock. Turn on the
+festive side and Santa's sleigh follows your cursor, lights hang under the menu bar and frost creeps
+into the corners of your windows. Every flake, bell and bulb is drawn or synthesized in code.
 
-<!-- ![demo](docs/demo.gif) -->
+![Snowstorm piling up on windows and the Dock](docs/preview-snowstorm.png)
+
+| Festive: Santa flyover, cursor sleigh, penguin | Window frost on a light desktop |
+|---|---|
+| ![Santa flyover, cursor sleigh and penguin](docs/preview-festive.png) | ![Frost in window corners](docs/preview-frost.png) |
+
+The previews come from the built-in snapshot tool (below), which runs the real simulation over a
+stand-in desktop.
 
 ## What it can do ✨
 
-- 🌨️ **Natural snowfall**: fine specks, small clumps, the occasional big fluffy flake and a rare six-armed crystal, each with its own size, tumble and fall speed
-- 🌬️ **Real wind**: a wind field that varies across the screen, with gusts that travel through it. Flakes near each other move alike; flakes far apart don't
-- 🎚️ **Three kinds of weather**: Light Snow, Gentle Snowfall and Snowstorm. Switching eases over a few seconds
-- 🏔️ **Snow piles up** on top of your windows, along the Dock and at the bottom of the screen, unevenly, the way drifts do
-- 🪟 **Snow rides your windows**: move one slowly and the pile comes along. Move it briskly and powder trickles off, jerk it and part of the pile slides and breaks away, shake it and each jolt throws more than the last
-- 🖥️ **Every display**: snow falls on all connected displays, with one shared weather, and piles follow windows from one display to another
-- ⚓ **Any Dock**: bottom, left or right, auto-hidden or not. Its snow survives hiding, resizing and magnification
-- 🔘 **Rounded corners**: the snow line follows a window's corners down instead of floating beside them
-- ↔️ **Resize a window** and the snow stays where it was; only the part that lost its ledge falls
-- 🫥 **Nothing is lost** when you switch Spaces or click between overlapping windows. Minimize or close a window and its snow falls
-- 💧 **Gradual melting** (optional), so piles settle at a level instead of filling up
-- 🖱️ **Clicks always pass through**. The cursor stirs nearby flakes, more the faster it moves, and you choose how much (or turn it off)
-- 🎅 **Festive cursor** (optional): a little Santa sleigh pulled by two galloping reindeer follows your cursor, or a Santa hat perches on it, or it just leaves a trail of snowflakes or golden sparkles
-- 🔔 **Sleigh bells** (off until you turn them on): a faint shimmer while the cursor moves and the occasional bell on a fast sweep, all synthesized in code
-- 💡 **Christmas lights** (optional): warm white or multicolored strings under the menu bar and along the front window, twinkling gently and glowing on the snow beside them
-- 🧊 **Window frost** (optional): branching frost creeps into the corners of windows that sit still, faster in heavy weather
-- 🛷 **Santa flyovers and rare events** (optional): now and then a sleigh crosses the sky, a shooting star streaks past, a gust blows through or powder lifts off a snowy window
-- ⛄ **Play Mode** (off until you turn it on): roll snowballs out of the snow, push them, carry them, and stack three into a snowman
+**Natural winter** (the default)
 
-## Try it 🚀
+- 🌨️ **Natural snowfall**: fine specks, small clumps, the occasional big fluffy flake and a rare six-armed crystal
+- 🌬️ **Real wind** that varies across the screen, with gusts that travel through it
+- 🏔️ **Snow piles up** on your windows, the Dock and the bottom of the screen, unevenly, the way drifts do
+- 🪟 **Snow rides your windows**: drag slowly and it comes along, jerk or shake and it breaks off as powder
+- 🖥️ **Every display**, one shared weather; ⚓ **any Dock** position, hidden or not
+- 💧 **Optional melting**, so piles level off
+- 🖱️ **Clicks always pass through**; the cursor stirs nearby flakes
+
+**Festive winter** (all optional, all off until you turn them on)
+
+- 🎅 **Cursor companion**: Santa's sleigh with galloping reindeer, or a Santa hat, beside the real pointer
+- ✨ **Cursor trails**: snowflakes, golden sparkles or a festive mix
+- 🔔 **Sleigh bells** on cursor movement and flyovers, and 🌬️ **wind ambience**, both synthesized and quiet
+- 💡 **Christmas lights** under the menu bar and along the front window, twinkling and glowing on the snow
+- 🧊 **Window frost** creeping into the corners of windows that sit still
+- 🛷 **Santa flyovers**, 🌠 **shooting stars, gusts and other rare events**
+- 🐧 **A penguin** that waddles and slides along the snow at the bottom of each display
+- ⛄ **Play Mode**: roll snowballs and build a snowman (only when you switch it on)
+
+**Five themes** set everything up in one go: Quiet Winter, Christmas Eve, Santa's Workshop, Winter
+Night and Winter Playground. Adjust anything afterwards; themes leave your sound and performance
+choices alone.
+
+## Install and run 🚀
+
+Requires macOS 14 or later and the Swift toolchain (Xcode or the Command Line Tools:
+`xcode-select --install`).
 
 ```sh
 git clone https://github.com/risshhabh/winter-is-coming.git
 cd winter-is-coming
-zsh build.sh              # build and run from the terminal
-# or
-zsh Scripts/bundle.sh     # build WinterIsComing.app
+zsh Scripts/bundle.sh          # builds WinterIsComing.app (release build, app icon, ad-hoc signed)
 open WinterIsComing.app
 ```
 
-Use the ❄︎ in the menu bar to pause, pick the weather, turn melting or Play Mode on, clear the snow, or quit.
+To keep it, drag `WinterIsComing.app` into `/Applications`, open it from there, and tick
+**Preferences → General → Launch at login**.
 
-- No `swift`? Run `xcode-select --install` first.
-- Want snow on the Dock too? Turn on **WinterIsComing** (or your terminal, if you ran `build.sh`) in System Settings → Privacy & Security → Accessibility.
+A ❄︎ appears in the menu bar. There is no Dock icon and no window until you open Preferences.
 
-## Menu
+For development, `zsh build.sh` builds and runs from the terminal, and `swift test` runs the tests.
 
-| Item | What it does |
+## Configuring ⚙️
+
+The ❄︎ menu has the everyday controls: pause, theme, weather, cursor effect and trail, lights,
+bells, mute, Santa and event triggers, Play Mode, clear, **Preferences… (⌘,)** and quit.
+
+Preferences has everything, applied the moment you change it and remembered between launches:
+
+| Tab | Settings |
 |---|---|
-| Light Snow / Gentle Snowfall / Snowstorm | Density, flake sizes, wind, fall speed and how fast snow builds up |
-| Snow in Front of Windows | A sparse layer of small flakes falls over your windows as well as behind them. Turn it off to keep window contents clear |
-| Gradual Melting | Piles slowly shrink, so they level off below their maximum |
-| Cursor Stirs Snow | Off, Subtle, Normal or Strong |
-| Cursor Effect | Normal Cursor, Santa Sleigh, Santa Hat, Snowflake Trail or Golden Sparkle Trail |
-| Companion Size | Small, Medium or Large |
-| Sleigh Bells, Mute, Volume | Movement-driven bells. Off by default; Mute and switching the effect off silence it at once |
-| Decorations | Christmas Lights (off, warm, multicolored), brightness and density; Window Frost; Santa Flyovers frequency; Atmospheric Events; and two "now" items for trying them out |
-| Play Mode (Snowballs) | Hover over snow and move sideways to roll a snowball; hold the mouse button to carry it. Always off at launch |
+| Snow | Weather, density, flake size, falling speed, wind, accumulation on/off, accumulation speed, maximum height, melting, snow in front of windows, how much the cursor stirs the snow |
+| Cursor | Companion (none, sleigh, hat), companion size, animation intensity, trail, trail intensity |
+| Audio | Sleigh bells, bell volume, wind ambience, ambient volume, mute all |
+| Decorations | Christmas lights, light brightness and density, window frost, Santa flyovers, atmospheric events, animated characters |
+| Performance | Frame-rate limit, particle budget, battery saver, pause on battery, pause in Low Power Mode, follow Reduce Motion |
+| General | Launch at login, Dock snow permission |
+
+A theme popup and **Restore Defaults** sit above the tabs.
+
+## Permissions 🔐
+
+- **None are required.** Snow, decorations, cursor effects and sound all work without any permission.
+- **Accessibility (optional)** is only used to read where the Dock is, for snow on the Dock. The app
+  never asks at launch: use **Preferences → General → Allow Dock Snow…**, enable WinterIsComing in
+  System Settings → Privacy & Security → Accessibility, then quit and reopen it.
+- It reads the cursor position and the time since the last key press (to step aside while you
+  type). It installs no event tap, sees no keystrokes, and cannot delay or block input.
+- No network access, no files outside its own preferences, no microphone or screen recording.
+
+## Performance 🔋
+
+Measured with the bundled app on an M4 MacBook on battery (so the default battery saver held it at
+30 fps), one display, over 20-second runs:
+
+| | Natural snow | With the cursor sleigh |
+|---|---|---|
+| CPU (`ps`, one core = 100%) | about 5% | about 5.5% |
+| Memory (RSS) | 62–65 MB, steady | 65 MB, steady |
+| Simulation step | 0.04 ms | 0.04 ms |
+| Sprite updates per frame | 0.1 ms | 0.12 ms |
+
+The work done to keep it there is described in [docs/perf.md](docs/perf.md). Paused, asleep or
+locked, it renders and simulates nothing and stops all audio.
 
 ## How it is put together 🧩
 
 ```
 Sources/WinterCore/        the simulation; no AppKit or SpriteKit, fully unit-tested
-  WindField, Weather         wind field, presets and their slow natural variation
-  FlakeSystem                falling flakes
-  PowderSystem               loose powder and the rare compact fragment
-  SnowField                  one pile: a height map with exact snow accounting
-  SurfaceManager             piles for every window, the Dock and the ground; occlusion; collisions
+  AppSettings                every user choice, persistence, clamping, the five themes
+  WindField, Weather         wind field, presets, the user's tuning, slow natural variation
+  FlakeSystem, PowderSystem  falling flakes; powder, trails and sparkles
+  SnowField, SurfaceManager  piles on windows, the Dock and the ground; occlusion; collisions
   WindowKinematics           how a window's velocity and acceleration dislodge its snow
   QualityGovernor            thins the snowfall when frames get expensive
-  CursorCompanion            how the sleigh or hat chases the cursor: spring, facing, tilt, gallop, idle
-  BellSequencer, BellSynth   when a bell rings and how loud; the synthesized bell sounds
-  Atmosphere                 EventDirector (what rare thing happens when) and light-string layout and twinkle
+  CursorCompanion            how the sleigh or hat chases the cursor
+  BellSequencer, BellSynth   when a bell rings; the synthesized bells and wind
+  Atmosphere                 rare events, light-string layout, the wandering penguin's motion
 Sources/WinterIsComing/    the app
+  AppDelegate, Preferences   menu, settings window, lifecycle, launch at login, auto-pause
   SnowModel                  the one shared winter: fixed-step loop, window polling, per-display flakes
-  OverlayController          one click-through overlay per display, kept in step with the display list
-  SnowScene                  mirrors one display's part of the model into SpriteKit
-  Render/                    procedural textures, particle sprites, the pile shader
+  OverlayController          one click-through overlay per display
+  SnowScene, Render/         SpriteKit: textures, particle sprites, the pile shader
+  Festive/                   companion, art, sound, lights, frost, penguin
   Play/                      snowballs and snowmen
-  Festive/                   CursorTracker, FestiveArt, CompanionRenderer, BellAudio, Decorations (lights, frost)
   WindowSource, DockTracker  where the windows and the Dock are
-Tests/WinterCoreTests/     73 tests: wind, accumulation, particles, window motion, Dock, displays, cursor, festive, atmosphere, cost
+  Power, AppIcon             battery and thermal state; the icon, drawn in code
+Tests/WinterCoreTests/     89 tests
 ```
-
-Run the tests with `swift test`.
 
 ## See it without watching the screen 📸
 
@@ -90,23 +135,55 @@ Run the tests with `swift test`.
 .build/release/WinterIsComing --snapshot out.png --preset storm --seconds 300
 ```
 
-This runs the real model headlessly over a stand-in desktop and writes a PNG. Add `--light` for a light desktop, `--displays 2` for a second display, `--motion shake|jerk|slow|still` to choose what happens to one window just before the picture, `--lead 1.1` to take the picture later, `--melt` to turn melting on, and `--cursor sleigh|hat|snowTrail|goldTrail` to add a scripted cursor with that effect (`--rest` leaves it standing still, `--size 1.35` makes it large). `--lights warm|multi`, `--frost`, `--flyover` and `--events` add the decorations.
+This runs the real model headlessly and writes a PNG. Options: `--light`, `--displays 2`,
+`--motion shake|jerk|slow|still`, `--lead 1.1`, `--melt`, `--cursor sleigh|hat|none`,
+`--trail snow|gold|festive`, `--size 1.35`, `--rest`, `--lights warm|multi`, `--frost`,
+`--flyover`, `--events`, `--characters`.
 
-## What macOS does not let it do 🚧
+`--smoke 20` runs the live app for 20 seconds with default settings (your saved settings are not
+touched) and prints timings and whether every overlay is click-through. `--audition` plays every bell.
 
-- **The system cursor cannot be replaced** for other apps: every app sets its own cursor, and the public API only applies inside your own windows. So the sleigh and hat are companions drawn in the click-through overlay beside the real pointer, which keeps its arrow, I-beam and hand shapes. The companion trails the pointer by design, and sits behind it so it never covers the tip.
-- **Everything is drawn in one layer above your windows**, so flyovers, shooting stars and frost pass in front of window content, not behind it. They are kept small, high up or in corners for that reason.
-- **The overlay is below the menu bar and Dock**, so the companion slides under them when the cursor goes there.
-- **Typing is detected only as "a key was pressed recently"** (no key contents, no permission needed); the companion fades back and bells pause for a moment after each key press.
+## Known limitations 🚧
 
-- **Why a window left the screen** is not reported. The app infers it: gone means closed, a Space change at the same moment means it is on another Space (snow kept), anything else after 0.6 s means minimized or hidden (snow falls). A Space switch that macOS announces late could be mistaken for a minimize.
-- **Window corner radius** is not available, so one value per macOS version is used (16 pt on macOS 26, 10 pt before). Windows with unusual corners will not match exactly.
-- **Window positions are polled**, not pushed, so during a very fast drag the pile can trail the window by a frame or two.
-- **Mission Control and Stage Manager** scale windows without changing their reported frames; piles stay where the frames say until you leave.
-- **The Dock** can only be measured with Accessibility permission. A hidden Dock is recognised by being off its display, which can be wrong if another display sits just beyond that edge.
-- **Displays stacked vertically**: snow falling off the bottom of the upper display does not continue onto the lower one.
-- **Play Mode** snowballs stay on the display they were made on.
+- **The system cursor cannot be replaced** for other apps, so the sleigh and hat are companions
+  drawn beside the real pointer, which keeps its own shape.
+- **Everything is drawn in one layer above your windows.** Flyovers, shooting stars and frost pass
+  in front of window content, so they are kept small, high up or in corners.
+- **The overlay is below the menu bar and Dock**; the companion slides under them.
+- **Why a window left the screen** is not reported by macOS. Gone means closed; a Space change at the
+  same moment means another Space (snow kept); otherwise minimized or hidden (snow falls). A late
+  Space-change notice can be mistaken for a minimize.
+- **Window corner radius** is not available; one value per macOS version is used.
+- **Window positions are polled** (up to 60 times a second while dragging, 5 at rest), so a pile can
+  trail a fast-dragged window by a frame or two, and a window moved by keyboard can take up to 0.2 s
+  to be noticed.
+- **Mission Control and Stage Manager** scale windows without changing their reported frames.
+- **The Dock** can only be found with Accessibility permission. A hidden Dock is recognised by being
+  off its display.
+- **Displays stacked vertically**: snow does not fall from the upper display onto the lower one.
+- **Play Mode** snowballs stay on the display they were made on; the penguin keeps to the bottom of
+  its display.
+- **Launch at login** needs the bundled app (not `swift run`), ideally in `/Applications`.
+- **The app is ad-hoc signed.** macOS may ask for Accessibility again after you rebuild it, and the
+  first launch of a downloaded copy needs right-click → Open.
+
+## Troubleshooting 🔧
+
+| Problem | Fix |
+|---|---|
+| No ❄︎ in the menu bar | The menu bar may be full: quit some menu bar apps or hold ⌘ and drag icons to make room. Check it is running with `pgrep -l WinterIsComing`. |
+| No snow on the Dock | Preferences → General → Allow Dock Snow…, enable it in System Settings, then quit and reopen. After a rebuild, remove and re-add it there. |
+| Snow disappeared | It may be paused (menu says Resume Snow) or auto-paused by a power setting (menu says so). Check Preferences → Performance. |
+| Fewer flakes than expected | Snow falls behind windows, so a maximized window hides most of it. Battery saver, Low Power Mode or the particle budget also thin it. |
+| No sound | Sound is off by default: Preferences → Audio. Check Mute all sound. Bells only ring while a cursor effect or trail is on, or during a flyover. |
+| Launch at login fails | Move the app to /Applications and try again; check System Settings → General → Login Items. |
+| "App is damaged" or won't open | Right-click → Open once, or rebuild with `zsh Scripts/bundle.sh`. |
+| Settings are wrong | Preferences → Restore Defaults, or `defaults delete local.winteriscoming` while the app is quit. |
+
+The full manual test checklist is in [docs/manual-tests.md](docs/manual-tests.md).
 
 ## License
 
-[MIT](LICENSE). Based on [WINTER_IS_COMING](https://github.com/yike-shi/WINTER_IS_COMING) by Shi Yike, whose original copyright notice is kept in `LICENSE` and whose commit is the root of this repository's history. · Made with 💙 and a little help from Claude
+[MIT](LICENSE). Based on [WINTER_IS_COMING](https://github.com/yike-shi/WINTER_IS_COMING) by Shi Yike,
+whose original copyright notice is kept in `LICENSE` and whose commit is the root of this
+repository's history. · Made with 💙 and a little help from Claude

@@ -1,3 +1,33 @@
+# Performance
+
+## Latest: release build (bundled app)
+
+Bundled app, M4 MacBook on battery (battery saver on, so 30 fps and density capped at 60%), one
+display, a maximized terminal in front, 20-second `--smoke` runs sampled once a second with `ps` and
+`ioreg`:
+
+| | Natural snow | Cursor sleigh |
+|---|---|---|
+| CPU | 4–6%, mean about 5% | 5–6.5% |
+| RSS | 62–65 MB, flat | 65 MB, flat |
+| Simulation step | 0.04 ms avg | 0.04 ms avg |
+| Sprite sync | 0.09 ms per frame | 0.12 ms per frame |
+| Window poll | 1.5–2 ms each | same |
+
+- **Window polling** is still the largest single cost on the main thread. The resting rate was
+  lowered from 10 Hz to 5 Hz after six quiet seconds: 227 polls per 20 s became 151. CPU did not
+  measurably change, so rendering and compositing, not polling, dominate what remains.
+- **GPU**: system-wide device utilisation read 24–41% with and without the app (another copy of
+  the app, an older build, was running throughout), so the app's share could not be separated.
+  Not measured properly; Instruments' Metal System Trace is the right tool.
+- **Idle**: while paused, asleep or locked, the overlays are ordered out or their views paused, so
+  neither the simulation nor rendering runs, and audio is stopped. The only remaining work is a
+  5-second timer checking power state.
+- **Budgets**: flakes per display up to 2,600, scaled by adaptive quality and the user's particle
+  budget; powder 2,400. Both are fixed-capacity arrays allocated once; nothing allocates per frame.
+
+Not measured: energy impact over hours, memory over 24 hours, a real second display.
+
 # Performance notes
 
 Machine: MacBook with Apple M4, built-in 2560 × 1664 display, macOS 26.6.

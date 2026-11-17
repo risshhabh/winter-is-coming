@@ -75,11 +75,12 @@ final class CompanionRenderer {
 
     func hide() { root.isHidden = true }
 
-    func sync(_ c: CursorCompanion, preset: CursorPreset, size: Double, alpha: Double) {
-        guard preset.hasCompanion else { root.isHidden = true; return }
+    /// `animation` scales how lively it moves: 0 glides without galloping or tilting, 1 is normal
+    func sync(_ c: CursorCompanion, preset: CursorPreset, size: Double, alpha: Double, animation: Double = 1) {
+        guard preset != .none else { root.isHidden = true; return }
         root.isHidden = false
         root.alpha = CGFloat(alpha)
-        root.position = CGPoint(x: c.x, y: c.y + c.hover)
+        root.position = CGPoint(x: c.x, y: c.y + c.hover * animation)
         let s = CGFloat(CompanionRenderer.baseScale * size)
         sleighGroup.isHidden = preset != .sleigh
         hat.isHidden = preset != .hat
@@ -89,8 +90,8 @@ final class CompanionRenderer {
             let f = CGFloat(c.facing)
             root.xScale = (abs(f) < 0.12 ? (f < 0 ? -0.12 : 0.12) : f) * s
             root.yScale = s
-            root.zRotation = CGFloat(c.tilt) * (f < 0 ? -1 : 1)
-            let stride = c.stride
+            root.zRotation = CGFloat(c.tilt * animation) * (f < 0 ? -1 : 1)
+            let stride = c.stride * animation
             for (i, d) in deer.enumerated() {
                 let p = c.gallop + Double(i) * 1.1
                 d.node.position.y = -2 + CGFloat(stride * 1.8 * sin(2 * p))
@@ -107,7 +108,7 @@ final class CompanionRenderer {
             root.xScale = s * 1.25
             root.yScale = s * 1.25
             // The hat swings back as the cursor moves, like something loosely perched
-            root.zRotation = CGFloat(max(-0.55, min(0.55, -c.vx / 650)) + 0.04 * sin(c.gallop))
+            root.zRotation = CGFloat((max(-0.55, min(0.55, -c.vx / 650)) + 0.04 * sin(c.gallop)) * animation)
         }
     }
 }

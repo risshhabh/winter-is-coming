@@ -1,20 +1,16 @@
 import Foundation
 
-public enum CursorPreset: String, CaseIterable {
-    case none, sleigh, hat, snowTrail, goldTrail
+/// What accompanies the cursor
+public enum CursorPreset: String, CaseIterable, Codable {
+    case none, sleigh, hat
 
     public var displayName: String {
         switch self {
         case .none: return "Normal Cursor"
         case .sleigh: return "Santa Sleigh"
         case .hat: return "Santa Hat"
-        case .snowTrail: return "Snowflake Trail"
-        case .goldTrail: return "Golden Sparkle Trail"
         }
     }
-
-    public var hasCompanion: Bool { self == .sleigh || self == .hat }
-    public var hasTrail: Bool { self == .sleigh || self == .snowTrail || self == .goldTrail }
 }
 
 /// Motion of the thing that accompanies the cursor (the sleigh, or the hat).

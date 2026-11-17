@@ -46,18 +46,29 @@ final class SnowModel {
     var cursorPreset = CursorPreset.none { didSet { if cursorPreset != oldValue { presetChanged() } } }
     /// 0.75 small, 1 medium, 1.35 large
     var companionSize = 1.0
+    /// How lively the companion and characters move: 0 still, 1 normal
+    var animation = 1.0
+    var trail = TrailStyle.none
+    /// Multiplier on how many trail particles are shed
+    var trailIntensity = 1.0
     private(set) var companion = CursorCompanion()
     private(set) var companionAlpha = 0.0
     private var trailDebt = 0.0
     private var trailRNG = SeededRNG(seed: 0x7A11)
-    /// Sleigh bells: the sequencer decides, the audio object plays. Both idle unless `soundOn`.
+    /// Sound: the sequencer decides when a bell rings, the audio object plays. Nothing runs unless
+    /// bells or the wind ambience is switched on (and not muted).
     var bellAudio: BellAudio?
-    var soundOn = false { didSet { if !soundOn { silence() } } }
+    var bellsOn = false { didSet { if !bellsOn { bells.reset() } } }
+    var ambienceOn = false
     private var bells = BellSequencer(variants: BellAudio.variants, seed: 0xBE11)
 
     // Decorations and atmosphere
     var decor = DecorationSettings()
     var director = EventDirector(seed: 0xA7305)
+    /// A wandering penguin per display (by display id) while characters are on
+    private(set) var walkers: [Int: Wanderer] = [:]
+    /// The flyover sleigh is drawn this much larger than a medium cursor sleigh
+    static let flyoverSize = 1.6
     /// The flyover sleigh reuses the cursor companion's motion and artwork, chasing a scripted point
     private(set) var flyer = CursorCompanion()
     private(set) var flyoverActive = false
@@ -70,13 +81,23 @@ final class SnowModel {
     var snowInFront = true
     /// 0 = the cursor leaves the snow alone, 1 = normal, 2 = strong
     var cursorStrength = 1.0
+    /// Frame rate when nothing constrains it (30 or 60)
+    var frameRate = 60
+    /// Fraction of the flake budget the user allows
+    var particleBudget = 1.0
+    /// Go to 30 fps and thinner snow on battery power
+    var batterySaver = true
+    /// Follow the system's Reduce Motion setting
+    var respectReduceMotion = true
     /// True when something other than the display link drives time (snapshot tool)
     var manualClock = false
     /// Overrides the system appearance (snapshot tool); nil follows the system
     var forceLightBackground: Bool?
     private(set) var lightBackground = false
-    /// Low Power Mode or thermal pressure: render at 30 fps with thinner snow
+    /// Low Power Mode, thermal pressure or (with battery saver) battery power: 30 fps, thinner snow
     private(set) var constrained = false
+    /// Frames per second the scenes should ask for
+    var targetFPS: Int { constrained ? 30 : frameRate }
 
     private let source: WindowSource
     private let dockTracker: DockTracker?
@@ -186,10 +207,12 @@ final class SnowModel {
         time += dt
 
         // Window tracking is the one expensive system call here, so its rate follows what is going on:
-        // every frame while something is being dragged, 30 Hz for a second after any change, 10 Hz at rest.
+        // every frame while something is being dragged, 30 Hz for a second after any change, 10 Hz for a
+        // few seconds more, then 5 Hz while the desktop stays as it is.
         pollAcc += dt
         let dragging = !manualClock && NSEvent.pressedMouseButtons != 0
-        let interval = manualClock || dragging ? 1.0 / 60 : (time - lastLayoutChange < 1 ? 1.0 / 30 : 1.0 / 10)
+        let quiet = time - lastLayoutChange
+        let interval = manualClock || dragging ? 1.0 / 60 : (quiet < 1 ? 1.0 / 30 : (quiet < 6 ? 1.0 / 10 : 1.0 / 5))
         if pollAcc >= interval - 1e-9 {
             let t0 = DispatchTime.now().uptimeNanoseconds
             pollWindows(dt: pollAcc)
@@ -209,7 +232,12 @@ final class SnowModel {
         stepBell = nil
         updateCursor(dt)
         updateAtmosphere(dt)
-        if soundOn, let audio = bellAudio { audio.update(dt: dt, shimmerGain: bells.shimmerGain, event: stepBell) }
+        if let audio = bellAudio, bellsOn || ambienceOn || audio.running {
+            let wp = weather.wind
+            audio.update(dt: dt, shimmerGain: bellsOn ? bells.shimmerGain : 0, event: bellsOn ? stepBell : nil,
+                         wind: ambienceOn ? min(1, (abs(wp.mean) + 0.5 * wp.gust + 10) / 90) : 0)
+        }
+        updateWalkers(dt)
         weather.step(dt: dt)
         let w = weather.effective
         // The wind changes over seconds; refreshing its grid 20 times a second is plenty
@@ -219,7 +247,7 @@ final class SnowModel {
             windPhase = 0
         }
         for d in displays {
-            d.env.densityScale = governor.scale
+            d.env.densityScale = governor.scale * particleBudget
             d.env.foregroundFraction = snowInFront ? 0.25 : 0
             d.flakes.step(dt: dt, env: d.env, wind: wind, surfaces: surfaces, weather: w)
         }
@@ -227,9 +255,11 @@ final class SnowModel {
 
         settleAcc += dt
         if settleAcc >= 1.0 / 15 {
-            // Frost forms faster in heavier weather: about four minutes in a storm, ten in light snow
+            // Frost forms faster in heavier weather and on Heavy: about a minute in a storm on Heavy,
+            // two to three in gentle snow. It needs the cold, not the snow, so it grows with
+            // accumulation switched off too.
             surfaces.settle(dt: settleAcc, meltRate: melting ? SnowModel.meltRate : 0,
-                            frostRate: decor.frost > 0 ? 0.003 * w.accumulation : 0)
+                            frostRate: decor.frost > 0 ? 0.006 * (0.5 + decor.frost) * WeatherParams.preset(weather.preset).accumulation : 0)
             settleAcc = 0
         }
     }
@@ -255,52 +285,66 @@ final class SnowModel {
         companion = CursorCompanion()
         companionAlpha = 0
         trailDebt = 0
-        if cursorPreset == .none { bells.reset() }
-    }
-
-    private func silence() {
-        bells.reset()
-        bellAudio?.stop()
     }
 
     private func updateFestive(_ dt: Double) {
         let preset = reduceMotion ? CursorPreset.none : cursorPreset
-        guard preset != .none else {
-            companionAlpha = 0
-            return
-        }
+        let style = reduceMotion ? TrailStyle.none : trail
         var emitX = cursor.x, emitY = cursor.y, emitVX = cursor.vx, emitVY = cursor.vy
-        if preset.hasCompanion {
+        if preset == .none {
+            companionAlpha = 0
+        } else {
             let o = CompanionRenderer.offset(preset, size: companionSize)
             companion.update(dt: dt, cursorX: cursor.x, cursorY: cursor.y, offsetX: o.x, offsetY: o.y, stiffness: o.stiffness)
             // Step back while the user is typing, so it never sits over the text being written
             companionAlpha += ((cursor.typing ? 0.2 : 1) - companionAlpha) * min(1, dt / 0.25)
-            // The trail leaves from the back of the sleigh
-            let s = CompanionRenderer.baseScale * companionSize
-            emitX = companion.x - companion.facing * 44 * s
-            emitY = companion.y - 4 * s
-            emitVX = companion.vx
-            emitVY = companion.vy
+            if preset == .sleigh {
+                // The trail leaves from the back of the sleigh
+                let s = CompanionRenderer.baseScale * companionSize
+                emitX = companion.x - companion.facing * 44 * s
+                emitY = companion.y - 4 * s
+                emitVX = companion.vx
+                emitVY = companion.vy
+            }
         }
-        if preset.hasTrail {
+        if style != .none {
             // Emission follows speed and is capped low: a slow cursor leaves almost nothing behind
             let v = hypot(emitVX, emitVY)
-            trailDebt += v < 50 ? 0 : min(preset == .sleigh ? 26 : 34, v / 28) * dt
+            trailDebt += v < 50 ? 0 : min(30, v / 28) * trailIntensity * dt
             while trailDebt >= 1 {
                 trailDebt -= 1
-                let r = trailRNG.unit()
-                let kind: UInt8
-                switch preset {
-                case .snowTrail: kind = PowderSystem.trailFlakeKind
-                case .goldTrail: kind = r < 0.85 ? PowderSystem.sparkleKind : PowderSystem.glowKind
-                default: kind = r < 0.5 ? PowderSystem.sparkleKind : (r < 0.9 ? PowderSystem.trailFlakeKind : PowderSystem.glowKind)
-                }
-                powder.emitTrail(kind: kind, x: emitX + trailRNG.range(-5, 5), y: emitY + trailRNG.range(-5, 5),
+                powder.emitTrail(kind: trailKind(style), x: emitX + trailRNG.range(-5, 5), y: emitY + trailRNG.range(-5, 5),
                                  vx: emitVX * 0.12 + trailRNG.range(-22, 22), vy: emitVY * 0.12 + trailRNG.range(-22, 22))
             }
         }
-        if soundOn {
+        // Cursor bells ring only when something festive follows the cursor
+        if bellsOn, preset != .none || style != .none {
             stepBell = bells.step(dt: dt, speed: cursor.typing ? 0 : cursor.speed, pan: pan(cursor.x))
+        }
+    }
+
+    private func trailKind(_ style: TrailStyle) -> UInt8 {
+        let r = trailRNG.unit()
+        switch style {
+        case .snow: return PowderSystem.trailFlakeKind
+        case .gold: return r < 0.85 ? PowderSystem.sparkleKind : PowderSystem.glowKind
+        default: return r < 0.5 ? PowderSystem.sparkleKind : (r < 0.9 ? PowderSystem.trailFlakeKind : PowderSystem.glowKind)
+        }
+    }
+
+    private func updateWalkers(_ dt: Double) {
+        guard decor.characters, !reduceMotion else {
+            walkers.removeAll()
+            return
+        }
+        for d in displays {
+            var w = walkers[d.id] ?? Wanderer(x: d.rect.minX + d.rect.width * 0.3, seed: seed ^ UInt64(truncatingIfNeeded: d.id))
+            w.step(dt: dt * max(0.3, animation), minX: d.rect.minX + 24, maxX: d.rect.maxX - 24)
+            walkers[d.id] = w
+        }
+        if walkers.count > displays.count {
+            let ids = Set(displays.map { $0.id })
+            walkers = walkers.filter { ids.contains($0.key) }
         }
     }
 
@@ -343,12 +387,12 @@ final class SnowModel {
             if eventRNG.unit() < 16 * dt {
                 let r = eventRNG.unit()
                 powder.emitTrail(kind: r < 0.55 ? PowderSystem.sparkleKind : (r < 0.9 ? PowderSystem.trailFlakeKind : PowderSystem.glowKind),
-                                 x: flyer.x - flyPath.dir * 30 + eventRNG.range(-4, 4), y: flyer.y - 3 + eventRNG.range(-4, 4),
+                                 x: flyer.x - flyPath.dir * 44 * SnowModel.flyoverSize * CompanionRenderer.baseScale + eventRNG.range(-4, 4), y: flyer.y - 3 + eventRNG.range(-4, 4),
                                  vx: flyer.vx * 0.1 + eventRNG.range(-18, 18), vy: eventRNG.range(-18, 18))
             }
             // Distant bells: quiet, irregular, panned to where the sleigh is
             flyPath.bell -= dt
-            if soundOn, stepBell == nil, flyPath.bell <= 0 {
+            if bellsOn, stepBell == nil, flyPath.bell <= 0 {
                 flyPath.bell = eventRNG.range(0.45, 0.95)
                 stepBell = BellEvent(variant: Int(eventRNG.next() % UInt64(BellAudio.variants)),
                                      gain: eventRNG.range(0.18, 0.3), pan: max(-1, min(1, pan(flyer.x))))
@@ -410,10 +454,9 @@ final class SnowModel {
             lightBackground = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) != .darkAqua
         }
         guard !manualClock else { return }
-        reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        reduceMotion = respectReduceMotion && NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
         weather.calm = reduceMotion
-        let info = ProcessInfo.processInfo
-        constrained = info.isLowPowerModeEnabled || info.thermalState == .serious || info.thermalState == .critical
+        constrained = Power.lowPower || Power.thermalPressure || (batterySaver && Power.onBattery)
     }
 
     private func pollWindows(dt: Double) {

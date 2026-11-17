@@ -45,6 +45,30 @@ enum FestiveArt {
         ctx.strokePath()
     }
 
+    // MARK: Penguin (18 x 22), facing right, with a red scarf
+
+    static func penguin() -> SKTexture {
+        texture(18, 22) { ctx in
+            let black = CGColor(red: 0.09, green: 0.10, blue: 0.13, alpha: 1)
+            let orange = CGColor(red: 0.96, green: 0.58, blue: 0.16, alpha: 1)
+            ellipse(ctx, 6.5, 1.2, 3, 1.1, orange)                  // feet
+            ellipse(ctx, 11.5, 1.2, 3, 1.1, orange)
+            ellipse(ctx, 9, 9.5, 6.4, 8.4, black)                    // body
+            ellipse(ctx, 9, 15.5, 4.6, 4.6, black)                   // head
+            ellipse(ctx, 10.2, 8.6, 4.2, 6.6, white)                 // belly
+            ellipse(ctx, 11.2, 15.6, 2.4, 2.6, white)                // face
+            ellipse(ctx, 12.0, 16.4, 0.75, 0.8, black)               // eye
+            ctx.setFillColor(orange)                                 // beak
+            ctx.move(to: CGPoint(x: 13.2, y: 15.6))
+            ctx.addLine(to: CGPoint(x: 17, y: 14.8))
+            ctx.addLine(to: CGPoint(x: 13.2, y: 14.1))
+            ctx.fillPath()
+            ellipse(ctx, 4.2, 8.5, 1.8, 5, black, rotate: -0.25)     // flipper
+            line(ctx, [(4.2, 12.4), (13.6, 12.4)], red, 1.8)          // scarf
+            line(ctx, [(5.2, 12.2), (3.6, 8.6)], darkRed, 1.6)
+        }
+    }
+
     // MARK: Reindeer (32 x 26), legs separate so they can gallop
 
     static func reindeer(lead: Bool) -> SKTexture {

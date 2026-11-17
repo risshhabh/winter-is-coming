@@ -108,7 +108,8 @@ Start with Snowstorm for a few minutes so the piles are worth moving.
 - [ ] Behind the sleigh: a thin mix of gold sparkles, tiny snowflakes and the odd soft glow.
 - [ ] Particles drift with the wind (try Snowstorm) and are gone in about a second.
 - [ ] A slow cursor leaves almost nothing; a fast sweep leaves a light trail, never a thick ribbon.
-- [ ] Snowflake Trail and Golden Sparkle Trail: the same, from the cursor itself, with no companion.
+- [ ] Cursor Trail → Snowflakes / Golden Sparkles / Festive Mix with Cursor Effect → Normal Cursor: the trail leaves the cursor itself. With the sleigh, it leaves the back of the sleigh.
+- [ ] Preferences → Cursor → Trail intensity: Faint leaves noticeably less than Rich.
 
 ### Santa hat
 
@@ -155,7 +156,8 @@ so you do not have to wait for them.
 
 ### Window frost
 
-- [ ] Light or Heavy: over a few minutes, branching frost creeps out of the bottom corners of windows that are sitting still. Faster in a Snowstorm.
+- [ ] Heavy: within about two minutes of Gentle Snowfall, frost with a pale core and a thin blue edge is clearly visible in the bottom corners of windows that are sitting still. Faster in a Snowstorm.
+- [ ] Light: grows more slowly and stays smaller than Heavy.
 - [ ] It stays within the corners, is fainter on the window you are using, and never covers the middle of a window.
 - [ ] Shake a window hard: its frost is knocked back along with its snow.
 - [ ] Gradual Melting on: frost thaws back to a thin rim.
@@ -164,7 +166,7 @@ so you do not have to wait for them.
 
 ### Santa flyovers
 
-- [ ] Fly Santa Now: the sleigh crosses one display high up in a shallow arc, reindeer galloping, in about ten seconds.
+- [ ] Fly Santa Now: the flyover sleigh is clearly larger than the Medium cursor sleigh (which is unchanged), and crosses one display high up in a shallow arc, reindeer galloping, in about ten seconds.
 - [ ] It leaves a thin trail of sparkles and flakes that drifts with the wind and fades.
 - [ ] With Sleigh Bells on: a few faint, irregular bells, panned to where the sleigh is. With bells off: silent.
 - [ ] You can keep typing and clicking while it passes; it never takes focus.
@@ -186,3 +188,40 @@ Use Show an Event Now repeatedly; it cycles through them in this order.
 ### All together
 
 - [ ] Snowstorm, Multicolored lights, Heavy frost, Santa Sleigh cursor, bells on: it reads as one scene, not competing effects. Nothing is so bright or busy that you would turn it off to work.
+
+## Characters (Preferences → Decorations → Animated characters)
+
+- [ ] A penguin with a red scarf appears on the snow along the bottom of each display.
+- [ ] It waddles, stops for a few seconds, turns round now and then, and sometimes flops on its belly and slides.
+- [ ] It stands on the snow surface, rising as the ground pile grows.
+- [ ] A window covering the bottom of the screen hides it; it reappears when uncovered.
+- [ ] Animation slider at Calm: it moves slowly; Reduce Motion on: it is gone.
+
+## Preferences, themes and app lifecycle
+
+- [ ] ❄︎ menu → Preferences… (⌘,) opens the window; every slider, checkbox and popup changes the scene at once.
+- [ ] Quit and reopen: every choice is as you left it.
+- [ ] Apply each theme from the menu or the Preferences popup: Quiet Winter (light snow, no decorations), Christmas Eve (warm lights, frost, occasional Santa), Santa's Workshop (sleigh, festive trail, multicolored lights, frequent Santa, penguin), Winter Night (gentle drifting snow, heavy frost, golden trail), Winter Playground (thick snow that builds fast, hat, snow trail, penguin). Sound and performance choices stay as they were.
+- [ ] After a theme, change any single setting: it sticks, and the rest of the theme stays.
+- [ ] Restore Defaults: back to plain snow, no sound.
+- [ ] Closing Preferences returns focus to the app you were in.
+- [ ] General → Launch at login (app in /Applications): log out and in; the ❄︎ is back. Unticking removes it from System Settings → General → Login Items.
+- [ ] Fresh install without Accessibility: no permission dialog at launch; General shows "needs Accessibility access" and Allow Dock Snow… opens the system prompt.
+- [ ] Finder shows the snowflake app icon on WinterIsComing.app.
+
+## Sound
+
+- [ ] Fresh settings: no sound at all, whatever you do.
+- [ ] Wind ambience on: a soft rush fades in over a second or two, stronger in a Snowstorm, with no click when it starts or loops.
+- [ ] Mute all sound, or switching both sound options off: silence at once.
+- [ ] Pause Snow while the wind is playing: silence at once. Lock the screen: silence.
+
+## Power and pausing
+
+- [ ] On battery with Battery saver on (default): 30 fps, slightly thinner snow.
+- [ ] Pause on battery power: unplug, and the snow disappears within about five seconds; plug in, and it returns.
+- [ ] Pause in Low Power Mode: same, with Low Power Mode.
+- [ ] Frame rate 30 fps on AC power: motion is still smooth.
+- [ ] Particle budget at Light: visibly fewer flakes.
+- [ ] Display sleep and wake, lock and unlock: snow resumes where it was, no stutter or burst.
+- [ ] Connect or disconnect a display while running: overlays appear on and leave the right screens.

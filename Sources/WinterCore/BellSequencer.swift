@@ -153,4 +153,28 @@ public enum BellSynth {
         normalize(&out, peak: 0.3)
         return out
     }
+
+    /// A seamless loop of soft wind: filtered noise with slow swells, quiet and without any tone
+    public static func windLoop(seconds: Double = 8) -> [Float] {
+        var rng = SeededRNG(seed: 0x71D)
+        let n = Int(seconds * sampleRate), fadeN = Int(0.5 * sampleRate)
+        var raw = [Float](repeating: 0, count: n + fadeN)
+        var a = 0.0, b = 0.0
+        for i in 0..<raw.count {
+            // Two one-pole low-pass stages: the hiss goes, a soft rush remains
+            a += 0.045 * (rng.range(-1, 1) - a)
+            b += 0.12 * (a - b)
+            let t = Double(i) / sampleRate
+            let swell = 0.7 + 0.3 * sin(2 * .pi * t / seconds) * sin(2 * .pi * 3 * t / seconds + 1)
+            raw[i] = Float(b * swell)
+        }
+        // Cross-fade the overhang into the start so the loop point is inaudible
+        var out = Array(raw[0..<n])
+        for k in 0..<fadeN {
+            let u = Float(k) / Float(fadeN)
+            out[k] = out[k] * u + raw[n + k] * (1 - u)
+        }
+        normalize(&out, peak: 0.5)
+        return out
+    }
 }

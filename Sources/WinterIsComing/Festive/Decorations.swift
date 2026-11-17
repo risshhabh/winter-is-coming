@@ -4,10 +4,6 @@ import WinterCore
 
 /// What the user chose for the decorations. Everything defaults to off: Natural Winter stays natural.
 struct DecorationSettings {
-    enum LightMode: String, CaseIterable {
-        case off, warm, multi
-        var displayName: String { self == .off ? "Off" : (self == .warm ? "Warm White" : "Multicolored") }
-    }
     var lights = LightMode.off
     /// 0.5 dim, 1 normal, 1.4 bright
     var lightBrightness = 1.0
@@ -15,6 +11,8 @@ struct DecorationSettings {
     var lightSpacing = 26.0
     /// 0 off, 0.6 light, 1 heavy
     var frost = 0.0
+    /// A penguin wanders along the snow at the bottom of each display
+    var characters = false
 }
 
 // MARK: - Christmas lights
@@ -137,13 +135,13 @@ final class LightsRenderer {
 ///
 /// The pattern is grown once in code (a fern-like dendrite) and reused. How far it has spread on each
 /// window comes from `Surface.frost`, which rises with the weather and is knocked back when the window
-/// is shaken. It stays within about 60 pt of the corner and is faint, so it frames content without
-/// covering it.
+/// is shaken. Each needle is a pale core inside a thin icy-blue edge, so it reads on white windows as
+/// well as dark ones. It stays within about 100 pt of the corner, so it frames content without covering it.
 final class FrostRenderer {
     private let parent: SKNode
     private var textures: [SKTexture] = []
     private var nodes: [Int: (left: SKSpriteNode, right: SKSpriteNode)] = [:]
-    static let size = 64.0
+    static let size = 100.0
 
     init(parent: SKNode) {
         self.parent = parent
@@ -154,16 +152,13 @@ final class FrostRenderer {
     /// Ice ferns growing out of the bottom-left corner
     static func makeTexture(_ rng: inout SeededRNG) -> SKTexture {
         FestiveArt.texture(64, 64) { ctx in
+            // Collect the needles first, then draw every edge before every core so cores stay on top
+            var segments: [(CGPoint, CGPoint, CGFloat, CGFloat)] = []
             func branch(_ x: CGFloat, _ y: CGFloat, _ angle: CGFloat, _ length: CGFloat, _ width: CGFloat, _ depth: Int) {
                 guard depth > 0, length > 1.5 else { return }
                 let ex = x + cos(angle) * length, ey = y + sin(angle) * length
                 // Fainter the further it gets from the corner
-                let fade = max(0, 1 - hypot(ex, ey) / 62)
-                ctx.setStrokeColor(CGColor(red: 1, green: 1, blue: 1, alpha: 0.75 * fade + 0.1))
-                ctx.setLineWidth(width)
-                ctx.move(to: CGPoint(x: x, y: y))
-                ctx.addLine(to: CGPoint(x: ex, y: ey))
-                ctx.strokePath()
+                segments.append((CGPoint(x: x, y: y), CGPoint(x: ex, y: ey), width, max(0, 1 - hypot(ex, ey) / 64)))
                 // Side needles at the crystal angle of 60 degrees, alternating, shrinking toward the tip
                 let steps = Int(length / 3.2)
                 for k in 1..<max(2, steps) {
@@ -175,19 +170,29 @@ final class FrostRenderer {
             }
             for k in 0..<5 {
                 let a = CGFloat(0.08 + Double(k) * 0.35 + rng.range(-0.08, 0.08))
-                branch(0, 0, a, CGFloat(rng.range(30, 56)), 0.9, 3)
+                branch(0, 0, a, CGFloat(rng.range(30, 56)), 1.1, 3)
             }
-            // A soft rime right in the corner
-            let colors = [CGColor(red: 1, green: 1, blue: 1, alpha: 0.5), CGColor(red: 1, green: 1, blue: 1, alpha: 0)] as CFArray
+            // A soft rime right in the corner, faintly blue so it shows on white
+            let colors = [CGColor(red: 0.86, green: 0.93, blue: 1, alpha: 0.75), CGColor(red: 0.86, green: 0.93, blue: 1, alpha: 0)] as CFArray
             let grad = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1])!
-            ctx.drawRadialGradient(grad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 26, options: [])
+            ctx.drawRadialGradient(grad, startCenter: .zero, startRadius: 0, endCenter: .zero, endRadius: 30, options: [])
+            for pass in 0..<2 {
+                for (a, b, w, fade) in segments {
+                    ctx.setStrokeColor(pass == 0
+                        ? CGColor(red: 0.42, green: 0.60, blue: 0.82, alpha: 0.55 * fade + 0.08)
+                        : CGColor(red: 0.97, green: 0.99, blue: 1, alpha: 0.9 * fade + 0.1))
+                    ctx.setLineWidth(pass == 0 ? w + 0.9 : w)
+                    ctx.move(to: a)
+                    ctx.addLine(to: b)
+                    ctx.strokePath()
+                }
+            }
         }
     }
 
     func sync(_ model: SnowModel, display: Rect) {
         let intensity = model.decor.frost
         let windows = model.surfaces.windows
-        let tint = model.lightBackground ? NSColor(calibratedRed: 0.55, green: 0.66, blue: 0.84, alpha: 1) : NSColor.white
         for (id, n) in nodes where model.surfaces.surface(id: id)?.onScreen != true || intensity <= 0 {
             n.left.removeFromParent(); n.right.removeFromParent()
             nodes[id] = nil
@@ -198,14 +203,15 @@ final class FrostRenderer {
             if n == nil {
                 let t = textures[abs(w.id) % textures.count], t2 = textures[abs(w.id + 1) % textures.count]
                 let l = SKSpriteNode(texture: t), r = SKSpriteNode(texture: t2)
-                for s in [l, r] { s.anchorPoint = .zero; s.zPosition = 4; s.colorBlendFactor = 1; parent.addChild(s) }
+                for s in [l, r] { s.anchorPoint = .zero; s.zPosition = 4; parent.addChild(s) }
                 n = (l, r)
                 nodes[w.id] = n
             }
             guard let pair = n else { continue }
-            // Grows outward from the corner as the frost level rises; fainter on the window in use
-            let side = CGFloat(FrostRenderer.size * (0.4 + 0.6 * w.frost))
-            let alpha = CGFloat(min(0.75, w.frost * intensity * (i == 0 ? 0.35 : 0.7)))
+            // Grows outward from the corner as the frost level rises; Heavy reaches further than Light.
+            // Fainter on the window in use, so it never sits heavily over what you are working on.
+            let side = CGFloat(FrostRenderer.size * (0.3 + 0.7 * w.frost) * (0.6 + 0.4 * intensity))
+            let alpha = CGFloat(w.frost <= 0.01 ? 0 : min(0.95, (0.35 + 0.65 * w.frost) * (i == 0 ? 0.6 : 0.95)))
             // Start a little inside the corner so the pattern does not poke out past its rounding
             let inset = max(1, w.field.cornerRadius * 0.3)
             let corners = [(pair.left, w.rect.minX + inset, 1.0), (pair.right, w.rect.maxX - inset, -1.0)]
@@ -219,8 +225,50 @@ final class FrostRenderer {
                 sprite.size = CGSize(width: side, height: side)
                 sprite.xScale = abs(sprite.xScale) * CGFloat(flip)
                 sprite.alpha = alpha
-                sprite.color = tint
             }
         }
+    }
+}
+
+// MARK: - Characters
+
+/// The penguin that wanders along the snow at the bottom of a display. Its motion comes from
+/// `Wanderer`; here it is only drawn: a waddle while walking, flat on its belly while sliding. It
+/// stands on the snow surface beneath it and disappears wherever a window covers that snow.
+final class CharacterRenderer {
+    private let sprite: SKSpriteNode
+
+    init(parent: SKNode) {
+        sprite = SKSpriteNode(texture: FestiveArt.penguin(), size: CGSize(width: 18, height: 22))
+        sprite.anchorPoint = CGPoint(x: 0.5, y: 0.04)
+        sprite.zPosition = 7
+        sprite.isHidden = true
+        parent.addChild(sprite)
+    }
+
+    func sync(_ model: SnowModel, displayID: Int) {
+        guard let w = model.walkers[displayID],
+              let g = model.surfaces.grounds.first(where: { $0.id == SurfaceManager.groundID(display: displayID) }),
+              let c = g.field.col(at: w.x), g.field.visible[c] else {
+            sprite.isHidden = true
+            return
+        }
+        sprite.isHidden = false
+        let a = model.animation
+        var y = g.field.surface(c) - 1
+        var rotation = 0.0
+        switch w.mode {
+        case .walk:
+            rotation = sin(w.phase) * 0.16 * a
+            y += abs(sin(w.phase)) * 1.2 * a
+        case .slide:
+            rotation = -w.dir * .pi / 2 * 0.92
+            y += 4
+        case .pause:
+            break
+        }
+        sprite.position = CGPoint(x: w.x, y: y)
+        sprite.zRotation = CGFloat(rotation)
+        sprite.xScale = CGFloat(w.dir)
     }
 }

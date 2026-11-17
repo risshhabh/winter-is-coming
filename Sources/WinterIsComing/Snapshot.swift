@@ -45,7 +45,8 @@ final class ScriptedWindowSource: WindowSource {
 ///   WinterIsComing --snapshot out.png [--preset storm] [--seconds 240] [--light] [--melt]
 ///                  [--motion shake|jerk|slow|still] [--lead 1.2] [--displays 2] [--corner 16]
 ///                  [--cursor sleigh|hat|snowTrail|goldTrail] [--size 1.35] [--rest]
-///                  [--lights warm|multi] [--frost] [--flyover] [--events]
+///                  [--trail snow|gold|festive] [--lights warm|multi] [--frost] [--flyover] [--events]
+///                  [--characters]
 enum Snapshot {
     static func run(_ args: [String]) -> Int32 {
         func value(_ flag: String) -> String? {
@@ -77,11 +78,13 @@ enum Snapshot {
         model.forceLightBackground = light
         model.melting = args.contains("--melt")
         model.setDock(Rect(x: 400, y: 0, width: 480, height: 62))
-        if let mode = DecorationSettings.LightMode(rawValue: value("--lights") ?? "") { model.decor.lights = mode }
+        if let mode = LightMode(rawValue: value("--lights") ?? "") { model.decor.lights = mode }
         if args.contains("--frost") { model.decor.frost = 1 }
+        model.decor.characters = args.contains("--characters")
+        model.trail = TrailStyle(rawValue: value("--trail") ?? "") ?? .none
         model.director.eventsEnabled = false
         let showFlyover = args.contains("--flyover"), showEvents = args.contains("--events")
-        if let preset = CursorPreset(rawValue: value("--cursor") ?? "") {
+        if let preset = CursorPreset(rawValue: value("--cursor") ?? ""), preset != .none || model.trail != .none {
             // A cursor sweeping left to right in a shallow arc over the last three seconds,
             // or (with --rest) arriving and then sitting still
             model.cursorPreset = preset

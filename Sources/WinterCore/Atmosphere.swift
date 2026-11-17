@@ -72,3 +72,60 @@ public enum Lights {
         return 0.775 + 0.225 * n
     }
 }
+
+/// A small character that wanders along a stretch of snow: it waddles, stops to look around, and now
+/// and then flops on its belly and slides. Pure motion; the artwork is drawn elsewhere.
+public struct Wanderer {
+    public enum Mode { case walk, pause, slide }
+
+    public private(set) var x: Double
+    /// +1 heading right, -1 heading left
+    public private(set) var dir = 1.0
+    public private(set) var mode = Mode.pause
+    /// Waddle cycle, radians
+    public private(set) var phase = 0.0
+    public private(set) var speed = 0.0
+    private var timer = 1.0
+    private var rng: SeededRNG
+
+    public static let walkSpeed = 16.0
+    public static let slideSpeed = 70.0
+
+    public init(x: Double, seed: UInt64) {
+        self.x = x
+        rng = SeededRNG(seed: seed)
+    }
+
+    /// Advance, staying within `minX...maxX`
+    public mutating func step(dt: Double, minX: Double, maxX: Double) {
+        timer -= dt
+        switch mode {
+        case .walk:
+            speed = Wanderer.walkSpeed
+            phase += 9 * dt
+        case .slide:
+            speed = max(0, speed - 22 * dt)
+            if speed < 6 { timer = 0 }
+        case .pause:
+            speed = 0
+        }
+        x += dir * speed * dt
+        if x < minX { x = minX; dir = 1 }
+        if x > maxX { x = maxX; dir = -1 }
+        guard timer <= 0 else { return }
+        // Choose what to do next
+        let r = rng.unit()
+        if mode != .pause {
+            mode = .pause
+            timer = rng.range(1.5, 5)
+        } else if r < 0.18 {
+            mode = .slide
+            speed = Wanderer.slideSpeed
+            timer = 6
+        } else {
+            mode = .walk
+            if r > 0.6 { dir = -dir }
+            timer = rng.range(3, 9)
+        }
+    }
+}

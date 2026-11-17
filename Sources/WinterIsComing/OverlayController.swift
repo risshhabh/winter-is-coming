@@ -78,10 +78,10 @@ final class OverlayController {
         scene.scaleMode = .resizeFill
         scene.play.enabled = playMode
         view.presentScene(scene)
-        view.isPaused = suspended
+        view.isPaused = suspended || hidden
         window.contentView = view
         window.setFrame(screen.frame, display: true)
-        if !paused { window.orderFrontRegardless() }
+        if !hidden { window.orderFrontRegardless() }
         return Overlay(window: window, view: view, scene: scene)
     }
 
@@ -93,15 +93,31 @@ final class OverlayController {
 
     /// Rendering stopped by the system (display asleep, screen locked)
     var suspended = false {
-        didSet { for o in overlays.values { o.view.isPaused = suspended || paused } }
+        didSet { for o in overlays.values { o.view.isPaused = suspended || hidden } }
     }
+
+    /// Paused automatically (on battery or in Low Power Mode, if the user asked for that)
+    private(set) var autoPaused = false
 
     /// Paused from the menu: overlays are taken off screen
     func setPaused(_ p: Bool) {
         paused = p
+        applyVisibility()
+    }
+
+    func setAutoPaused(_ p: Bool) {
+        guard p != autoPaused else { return }
+        autoPaused = p
+        applyVisibility()
+    }
+
+    /// True while nothing is drawn and nothing is simulated
+    var hidden: Bool { paused || autoPaused }
+
+    private func applyVisibility() {
         for o in overlays.values {
-            o.view.isPaused = suspended || paused
-            if p { o.window.orderOut(nil) } else { o.window.orderFrontRegardless() }
+            o.view.isPaused = suspended || hidden
+            if hidden { o.window.orderOut(nil) } else { o.window.orderFrontRegardless() }
         }
     }
 

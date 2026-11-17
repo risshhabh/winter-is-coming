@@ -21,6 +21,7 @@ final class SnowScene: SKScene {
     private var flyoverRenderer: CompanionRenderer!
     private var lightsRenderer: LightsRenderer!
     private var frostRenderer: FrostRenderer!
+    private var characterRenderer: CharacterRenderer!
     private(set) var play: SnowballController!
     private var lastT: TimeInterval = 0
 
@@ -37,6 +38,7 @@ final class SnowScene: SKScene {
         flyoverRenderer = CompanionRenderer(parent: world)
         lightsRenderer = LightsRenderer(parent: world, glow: textures.glow)
         frostRenderer = FrostRenderer(parent: world)
+        characterRenderer = CharacterRenderer(parent: world)
         play = SnowballController(scene: self)
     }
 
@@ -56,8 +58,8 @@ final class SnowScene: SKScene {
         lastT = currentTime
         render(frameDt: dt)
         play.updateMouseCapture(view?.window)
-        // Half the frame rate while the system is short of power or running hot
-        let fps = model.constrained ? 30 : 60
+        // The user's frame-rate limit, halved while the system is short of power or running hot
+        let fps = model.targetFPS
         if let view, view.preferredFramesPerSecond != fps { view.preferredFramesPerSecond = fps }
     }
 
@@ -74,13 +76,14 @@ final class SnowScene: SKScene {
         powderRenderer.sync(model.powder)
         pileRenderer.sync(model.surfaces, display: d.rect)
         companionRenderer.sync(model.companion, preset: model.companionAlpha > 0.01 ? model.cursorPreset : .none,
-                               size: model.companionSize, alpha: model.companionAlpha)
-        flyoverRenderer.sync(model.flyer, preset: model.flyoverActive ? .sleigh : .none, size: 1.15, alpha: 1)
+                               size: model.companionSize, alpha: model.companionAlpha, animation: model.animation)
+        flyoverRenderer.sync(model.flyer, preset: model.flyoverActive ? .sleigh : .none, size: SnowModel.flyoverSize, alpha: 1)
         // Lights hang just below the menu bar; its height comes from the screen this scene is on
         var topInset = 24.0
         if let screen = view?.window?.screen { topInset = Double(screen.frame.maxY - screen.visibleFrame.maxY) }
         lightsRenderer.sync(model, display: d.rect, topInset: max(topInset, 2))
         frostRenderer.sync(model, display: d.rect)
+        characterRenderer.sync(model, displayID: displayID)
         play.step(frameDt)
         model.addSyncTime(DispatchTime.now().uptimeNanoseconds - t0)
     }

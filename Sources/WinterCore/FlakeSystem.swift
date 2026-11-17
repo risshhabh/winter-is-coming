@@ -142,6 +142,7 @@ public struct FlakeSystem {
             a = 0.78 + 0.15 * z
         }
         a = min(0.95, a + rng.range(-0.07, 0.07))
+        radius *= w.sizeScale
 
         let isFront = z < 0.6 && k.rawValue <= FlakeKind.tuft.rawValue && rng.unit() < env.foregroundFraction
         if startY == nil, !isFront, surfaces.isSkyBlocked(px, display: env.display) {

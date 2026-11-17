@@ -1,6 +1,6 @@
 import Foundation
 
-public enum SnowPreset: String, CaseIterable {
+public enum SnowPreset: String, CaseIterable, Codable {
     case light, gentle, storm
 
     public var displayName: String {
@@ -32,6 +32,8 @@ public struct WeatherParams: Equatable {
     public var gust: Double
     /// How much snow one landing flake contributes
     public var accumulation: Double
+    /// Flake radius multiplier (a user preference; presets leave it at 1)
+    public var sizeScale = 1.0
 
     public static func preset(_ p: SnowPreset) -> WeatherParams {
         switch p {
@@ -58,6 +60,17 @@ public struct WeatherParams: Equatable {
     }
 }
 
+/// The user's adjustments on top of the chosen weather; all 1 means "as designed"
+public struct WeatherTuning: Equatable {
+    public var density = 1.0
+    public var flakeSize = 1.0
+    public var fallSpeed = 1.0
+    public var wind = 1.0
+    /// 0 switches accumulation off
+    public var accumulation = 1.0
+    public init() {}
+}
+
 /// Eases between presets and adds slow natural variation on top, so the snowfall is never static.
 public struct Weather {
     public private(set) var preset: SnowPreset
@@ -73,6 +86,7 @@ public struct Weather {
     public private(set) var gustBoost = 0.0
     /// A spell of heavier or lighter snow (atmospheric event): eases back over about a minute
     public private(set) var intensityShift = 0.0
+    public var tuning = WeatherTuning()
     public let seed: UInt64
 
     public init(preset: SnowPreset, seed: UInt64) {
@@ -121,6 +135,13 @@ public struct Weather {
         p.windMean *= 1 + 1.2 * gustBoost
         p.turbulence *= 1 + 0.8 * gustBoost
         p.gust = p.gust * (1 + 1.5 * gustBoost) + 25 * gustBoost * (1 - calmBlend)
+        p.density *= tuning.density
+        p.sizeScale = tuning.flakeSize
+        p.fallSpeed *= tuning.fallSpeed
+        p.windMean *= tuning.wind
+        p.turbulence *= 0.5 + 0.5 * tuning.wind
+        p.gust *= tuning.wind
+        p.accumulation *= tuning.accumulation
         return p
     }
 

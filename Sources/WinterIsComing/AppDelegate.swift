@@ -1,121 +1,72 @@
 import Cocoa
-import SpriteKit
+import ServiceManagement
 import WinterCore
 
-/// User choices, remembered between launches
-enum Settings {
-    private static let d = UserDefaults.standard
-
-    static var preset: SnowPreset {
-        get { SnowPreset(rawValue: d.string(forKey: "preset") ?? "") ?? .gentle }
-        set { d.set(newValue.rawValue, forKey: "preset") }
-    }
-    static var melting: Bool {
-        get { d.bool(forKey: "melting") }
-        set { d.set(newValue, forKey: "melting") }
-    }
-    static var snowInFront: Bool {
-        get { d.object(forKey: "snowInFront") == nil ? true : d.bool(forKey: "snowInFront") }
-        set { d.set(newValue, forKey: "snowInFront") }
-    }
-    static var cursorPreset: CursorPreset {
-        get { CursorPreset(rawValue: d.string(forKey: "cursorPreset") ?? "") ?? .none }
-        set { d.set(newValue.rawValue, forKey: "cursorPreset") }
-    }
-    static var companionSize: Double {
-        get { d.object(forKey: "companionSize") == nil ? 1 : d.double(forKey: "companionSize") }
-        set { d.set(newValue, forKey: "companionSize") }
-    }
-    /// Sleigh bells are off until the user turns them on
-    static var bells: Bool {
-        get { d.bool(forKey: "bells") }
-        set { d.set(newValue, forKey: "bells") }
-    }
-    static var muted: Bool {
-        get { d.bool(forKey: "muted") }
-        set { d.set(newValue, forKey: "muted") }
-    }
-    static var volume: Double {
-        get { d.object(forKey: "volume") == nil ? 0.5 : d.double(forKey: "volume") }
-        set { d.set(newValue, forKey: "volume") }
-    }
-    static func number(_ key: String, _ fallback: Double) -> Double { d.object(forKey: key) == nil ? fallback : d.double(forKey: key) }
-    static func setNumber(_ key: String, _ value: Double) { d.set(value, forKey: key) }
-    static var lights: DecorationSettings.LightMode {
-        get { DecorationSettings.LightMode(rawValue: d.string(forKey: "lights") ?? "") ?? .off }
-        set { d.set(newValue.rawValue, forKey: "lights") }
-    }
-    static var events: Bool {
-        get { d.bool(forKey: "events") }
-        set { d.set(newValue, forKey: "events") }
-    }
-    /// How strongly the cursor stirs falling snow: 0 off, 1 normal
-    static var cursorStrength: Double {
-        get { d.object(forKey: "cursorStrength") == nil ? 1 : d.double(forKey: "cursorStrength") }
-        set { d.set(newValue, forKey: "cursorStrength") }
-    }
-}
-
-// MARK: - Menu bar icon
-
-final class AppDelegate: NSObject, NSApplicationDelegate {
-    static let cursorChoices: [(title: String, strength: Double)] = [("Off", 0), ("Subtle", 0.5), ("Normal", 1), ("Strong", 2)]
+final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
+    static let cursorChoices: [(String, Double)] = [("Off", 0), ("Subtle", 0.5), ("Normal", 1), ("Strong", 2)]
+    static let sizeChoices: [(String, Double)] = [("Small", 0.75), ("Medium", 1), ("Large", 1.35)]
+    static let densityChoices: [(String, Double)] = [("Sparse", 38), ("Normal", 26), ("Dense", 18)]
+    static let frostChoices: [(String, Double)] = [("Off", 0), ("Light", 0.6), ("Heavy", 1)]
+    static let flyoverChoices: [(String, Double)] = [("Off", 0), ("Rare (about hourly)", 3600),
+                                                     ("Sometimes (about every 20 min)", 1200), ("Often (about every 5 min)", 300)]
 
     var model: SnowModel!
     var overlays: OverlayController!
     var statusItem: NSStatusItem!
-    var pauseItem: NSMenuItem!
-    var presetItems: [NSMenuItem] = []
-    var cursorItems: [NSMenuItem] = []
-    static let sizeChoices: [(title: String, size: Double)] = [("Small", 0.75), ("Medium", 1), ("Large", 1.35)]
-    var effectItems: [NSMenuItem] = []
-    var sizeItems: [NSMenuItem] = []
-    var bellsItem: NSMenuItem!
-    var muteItem: NSMenuItem!
     let audio = BellAudio()
-    /// Decoration choices that are a pick-one list: (menu title, settings key, default, options)
-    static let decorChoices: [(title: String, key: String, fallback: Double, options: [(String, Double)])] = [
-        ("Light Brightness", "lightBrightness", 1, [("Dim", 0.5), ("Normal", 1), ("Bright", 1.4)]),
-        ("Light Density", "lightSpacing", 26, [("Sparse", 38), ("Normal", 26), ("Dense", 18)]),
-        ("Window Frost", "frost", 0, [("Off", 0), ("Light", 0.6), ("Heavy", 1)]),
-        ("Santa Flyovers", "flyoverGap", 0, [("Off", 0), ("Rare (about hourly)", 3600), ("Sometimes (about every 20 min)", 1200), ("Often (about every 5 min)", 300)]),
-    ]
-    var lightItems: [NSMenuItem] = []
-    var decorItems: [[NSMenuItem]] = []
-    var eventsItem: NSMenuItem!
+    private var preferences: PreferencesWindow?
+    private var dockTracker: DockTracker!
+    private var environmentTimer: Timer?
+    /// Why rendering is stopped by the system right now (display asleep, screen locked, user switched)
+    private var suspendReasons = Set<String>()
+    private var eventCursor = 0
+
     /// Smoke test: run for this many seconds, print statistics and quit. No permission prompt.
     var smokeSeconds: Double?
     var smokePreset: CursorPreset?
+    /// Settings live here in memory while running (smoke tests never touch the stored ones)
+    private var defaults = UserDefaults.standard
+
+    /// Every change is saved at once and pushed into the running app
+    var settings = AppSettings() {
+        didSet {
+            settings = settings.clamped()
+            if smokeSeconds == nil { settings.save(to: defaults) }
+            apply()
+        }
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        settings = smokeSeconds == nil ? Self.loadSettings(defaults) : AppSettings()
+        if let p = smokePreset { settings.companion = p }
+
         // Window corners are rounder from macOS 26 on. The radius is not available from the system,
         // so this is the standard window's value; the snow line follows it.
         let corner = ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26 ? 16.0 : 10.0
+        // Never ask for Accessibility at launch: Dock snow is optional and asked for from Preferences
+        dockTracker = DockTracker(prompt: false)
         model = SnowModel(displays: OverlayController.currentDisplays(), source: SystemWindowSource(),
-                          dockTracker: DockTracker(prompt: smokeSeconds == nil),
-                          preset: Settings.preset, seed: UInt64(Date().timeIntervalSince1970), cornerRadius: corner)
-        model.melting = Settings.melting
-        model.snowInFront = Settings.snowInFront
-        model.cursorStrength = Settings.cursorStrength
-        model.cursorPreset = smokePreset ?? Settings.cursorPreset
-        model.companionSize = Settings.companionSize
+                          dockTracker: dockTracker, preset: settings.weather,
+                          seed: UInt64(Date().timeIntervalSince1970), cornerRadius: corner)
         model.bellAudio = audio
-        audio.volume = Settings.volume
-        applySound()
-        applyDecor()
         overlays = OverlayController(model: model)
-
+        apply()
         setupMenu()
 
-        // Stop rendering while the display sleeps or the screen is locked; otherwise SpriteKit
-        // logs "no drawables available" because nothing is being shown.
+        // Stop rendering and sound while nobody can see it
         let ws = NSWorkspace.shared.notificationCenter
-        for name in [NSWorkspace.screensDidSleepNotification, NSWorkspace.sessionDidResignActiveNotification] {
-            ws.addObserver(self, selector: #selector(suspendRendering), name: name, object: nil)
-        }
-        for name in [NSWorkspace.screensDidWakeNotification, NSWorkspace.sessionDidBecomeActiveNotification] {
-            ws.addObserver(self, selector: #selector(resumeRendering), name: name, object: nil)
-        }
+        ws.addObserver(self, selector: #selector(displaysSlept), name: NSWorkspace.screensDidSleepNotification, object: nil)
+        ws.addObserver(self, selector: #selector(displaysWoke), name: NSWorkspace.screensDidWakeNotification, object: nil)
+        ws.addObserver(self, selector: #selector(sessionResigned), name: NSWorkspace.sessionDidResignActiveNotification, object: nil)
+        ws.addObserver(self, selector: #selector(sessionActivated), name: NSWorkspace.sessionDidBecomeActiveNotification, object: nil)
+        let dnc = DistributedNotificationCenter.default()
+        dnc.addObserver(self, selector: #selector(screenLocked), name: .init("com.apple.screenIsLocked"), object: nil)
+        dnc.addObserver(self, selector: #selector(screenUnlocked), name: .init("com.apple.screenIsUnlocked"), object: nil)
+
+        // Automatic pausing (battery, Low Power Mode) is checked every few seconds, also while paused
+        environmentTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in self?.checkAutoPause() }
+        environmentTimer?.tolerance = 2
+        checkAutoPause()
 
         if let seconds = smokeSeconds {
             DispatchQueue.main.asyncAfter(deadline: .now() + seconds) { [self] in
@@ -128,269 +79,260 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    @objc func suspendRendering() { overlays.suspended = true }
-    @objc func resumeRendering() { overlays.suspended = false }
+    func applicationWillTerminate(_ notification: Notification) {
+        environmentTimer?.invalidate()
+        audio.stop()
+        if smokeSeconds == nil { settings.save(to: defaults) }
+    }
+
+    /// Stored settings, or the ones from the previous version's separate keys on first launch after updating
+    static func loadSettings(_ d: UserDefaults) -> AppSettings {
+        if d.data(forKey: AppSettings.defaultsKey) != nil { return AppSettings.load(from: d) }
+        var s = AppSettings()
+        guard d.object(forKey: "preset") != nil || d.object(forKey: "cursorPreset") != nil else { return s }
+        func num(_ k: String, _ f: Double) -> Double { d.object(forKey: k) == nil ? f : d.double(forKey: k) }
+        s.weather = SnowPreset(rawValue: d.string(forKey: "preset") ?? "") ?? .gentle
+        s.melting = d.bool(forKey: "melting")
+        s.snowInFront = d.object(forKey: "snowInFront") == nil || d.bool(forKey: "snowInFront")
+        s.cursorStir = num("cursorStrength", 1)
+        switch d.string(forKey: "cursorPreset") ?? "" {
+        case "sleigh": s.companion = .sleigh; s.trail = .festive
+        case "hat": s.companion = .hat
+        case "snowTrail": s.trail = .snow
+        case "goldTrail": s.trail = .gold
+        default: break
+        }
+        s.companionSize = num("companionSize", 1)
+        s.bells = d.bool(forKey: "bells")
+        s.muted = d.bool(forKey: "muted")
+        s.bellVolume = num("volume", 0.5)
+        s.lights = LightMode(rawValue: d.string(forKey: "lights") ?? "") ?? .off
+        s.lightBrightness = num("lightBrightness", 1)
+        s.lightSpacing = num("lightSpacing", 26)
+        s.frost = num("frost", 0)
+        s.flyoverGap = num("flyoverGap", 0)
+        s.events = d.bool(forKey: "events")
+        return s.clamped()
+    }
+
+    /// Push every setting into the running app
+    func apply() {
+        guard let model else { return }
+        let s = settings
+        if model.weather.preset != s.weather { model.weather.setPreset(s.weather) }   // eases over a few seconds
+        var t = WeatherTuning()
+        t.density = s.density
+        t.flakeSize = s.flakeSize
+        t.fallSpeed = s.fallSpeed
+        t.wind = s.wind
+        t.accumulation = s.accumulation ? s.accumulationSpeed : 0
+        model.weather.tuning = t
+        model.surfaces.heightScale = s.maxHeight
+        model.melting = s.melting
+        model.snowInFront = s.snowInFront
+        model.cursorStrength = s.cursorStir
+
+        model.cursorPreset = s.companion
+        model.companionSize = s.companionSize
+        model.animation = s.animation
+        model.trail = s.trail
+        model.trailIntensity = s.trailIntensity
+
+        // Mute and switching sound off stop the engine at once
+        model.bellsOn = s.bells && !s.muted
+        model.ambienceOn = s.windAmbience && !s.muted
+        audio.bellVolume = s.bellVolume
+        audio.ambientVolume = s.ambientVolume
+        if !model.bellsOn && !model.ambienceOn { audio.stop() }
+
+        model.decor.lights = s.lights
+        model.decor.lightBrightness = s.lightBrightness
+        model.decor.lightSpacing = s.lightSpacing
+        model.decor.frost = s.frost
+        model.decor.characters = s.characters
+        model.director.flyoverGap = s.flyoverGap
+        model.director.eventsEnabled = s.events
+
+        model.frameRate = s.frameRate
+        model.particleBudget = s.particleBudget
+        model.batterySaver = s.batterySaver
+        model.respectReduceMotion = s.respectReduceMotion
+        checkAutoPause()
+        preferences?.refresh()
+    }
+
+    private func checkAutoPause() {
+        guard let overlays else { return }
+        let pause = (settings.pauseOnBattery && Power.onBattery) || (settings.pauseOnLowPower && Power.lowPower)
+        if pause != overlays.autoPaused {
+            overlays.setAutoPaused(pause)
+            if pause { audio.stop() }
+        }
+    }
+
+    // MARK: System events
+
+    private func suspend(_ reason: String) {
+        suspendReasons.insert(reason)
+        overlays.suspended = true
+        audio.stop()
+    }
+
+    private func resume(_ reason: String) {
+        suspendReasons.remove(reason)
+        if suspendReasons.isEmpty { overlays.suspended = false }
+    }
+
+    @objc func displaysSlept() { suspend("sleep") }
+    @objc func displaysWoke() { resume("sleep") }
+    @objc func sessionResigned() { suspend("session") }
+    @objc func sessionActivated() { resume("session") }
+    @objc func screenLocked() { suspend("lock") }
+    @objc func screenUnlocked() { resume("lock") }
+
+    // MARK: Launch at login
+
+    /// Only an app bundle can be registered; running from the build folder it is unavailable
+    static var canLaunchAtLogin: Bool { Bundle.main.bundleURL.pathExtension == "app" }
+
+    var launchAtLogin: Bool {
+        get { SMAppService.mainApp.status == .enabled }
+        set {
+            do {
+                if newValue { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
+            } catch {
+                let alert = NSAlert()
+                alert.messageText = "Could not change Launch at Login"
+                alert.informativeText = error.localizedDescription
+                    + "\n\nMove WinterIsComing.app to the Applications folder and try again, or check System Settings → General → Login Items."
+                alert.runModal()
+            }
+        }
+    }
+
+    // MARK: Accessibility (Dock snow only)
+
+    var dockAccess: Bool { AXIsProcessTrusted() }
+
+    func requestDockAccess() {
+        let opts = ["AXTrustedCheckOptionPrompt": true] as CFDictionary
+        _ = AXIsProcessTrustedWithOptions(opts)
+    }
+
+    // MARK: Menu
 
     func setupMenu() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.title = "❄︎"
+        if let image = NSImage(systemSymbolName: "snowflake", accessibilityDescription: "WinterIsComing") {
+            image.isTemplate = true
+            statusItem.button?.image = image
+        } else {
+            statusItem.button?.title = "❄︎"
+        }
         let menu = NSMenu()
-
-        pauseItem = NSMenuItem(title: "Pause Snow", action: #selector(togglePause), keyEquivalent: "p")
-        pauseItem.target = self
-        menu.addItem(pauseItem)
-        menu.addItem(.separator())
-
-        for preset in SnowPreset.allCases {
-            let it = NSMenuItem(title: preset.displayName, action: #selector(setPreset(_:)), keyEquivalent: "")
-            it.target = self
-            it.representedObject = preset.rawValue
-            it.state = preset == Settings.preset ? .on : .off
-            menu.addItem(it)
-            presetItems.append(it)
-        }
-        menu.addItem(.separator())
-
-        let front = NSMenuItem(title: "Snow in Front of Windows", action: #selector(toggleFront(_:)), keyEquivalent: "")
-        front.target = self
-        front.state = Settings.snowInFront ? .on : .off
-        menu.addItem(front)
-
-        let melt = NSMenuItem(title: "Gradual Melting", action: #selector(toggleMelting(_:)), keyEquivalent: "")
-        melt.target = self
-        melt.state = Settings.melting ? .on : .off
-        menu.addItem(melt)
-
-        let cursor = NSMenuItem(title: "Cursor Stirs Snow", action: nil, keyEquivalent: "")
-        let sub = NSMenu()
-        for (i, choice) in AppDelegate.cursorChoices.enumerated() {
-            let it = NSMenuItem(title: choice.title, action: #selector(setCursorStrength(_:)), keyEquivalent: "")
-            it.target = self
-            it.tag = i
-            it.state = choice.strength == Settings.cursorStrength ? .on : .off
-            sub.addItem(it)
-            cursorItems.append(it)
-        }
-        cursor.submenu = sub
-        menu.addItem(cursor)
-
-        menu.addItem(.separator())
-        let effect = NSMenuItem(title: "Cursor Effect", action: nil, keyEquivalent: "")
-        let effectMenu = NSMenu()
-        for (i, preset) in CursorPreset.allCases.enumerated() {
-            let it = NSMenuItem(title: preset.displayName, action: #selector(setCursorPreset(_:)), keyEquivalent: i == 0 ? "0" : "")
-            it.target = self
-            it.representedObject = preset.rawValue
-            it.state = preset == Settings.cursorPreset ? .on : .off
-            effectMenu.addItem(it)
-            effectItems.append(it)
-        }
-        effect.submenu = effectMenu
-        menu.addItem(effect)
-
-        let size = NSMenuItem(title: "Companion Size", action: nil, keyEquivalent: "")
-        let sizeMenu = NSMenu()
-        for (i, choice) in AppDelegate.sizeChoices.enumerated() {
-            let it = NSMenuItem(title: choice.title, action: #selector(setCompanionSize(_:)), keyEquivalent: "")
-            it.target = self
-            it.tag = i
-            it.state = choice.size == Settings.companionSize ? .on : .off
-            sizeMenu.addItem(it)
-            sizeItems.append(it)
-        }
-        size.submenu = sizeMenu
-        menu.addItem(size)
-
-        bellsItem = NSMenuItem(title: "Sleigh Bells", action: #selector(toggleBells), keyEquivalent: "")
-        bellsItem.target = self
-        bellsItem.state = Settings.bells ? .on : .off
-        menu.addItem(bellsItem)
-        muteItem = NSMenuItem(title: "Mute", action: #selector(toggleMute), keyEquivalent: "m")
-        muteItem.target = self
-        muteItem.state = Settings.muted ? .on : .off
-        menu.addItem(muteItem)
-        let volumeItem = NSMenuItem()
-        let box = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 28))
-        let label = NSTextField(labelWithString: "Volume")
-        label.frame = NSRect(x: 20, y: 5, width: 56, height: 18)
-        label.font = .menuFont(ofSize: 0)
-        let slider = NSSlider(value: Settings.volume, minValue: 0, maxValue: 1, target: self, action: #selector(volumeChanged(_:)))
-        slider.frame = NSRect(x: 78, y: 4, width: 126, height: 20)
-        box.addSubview(label)
-        box.addSubview(slider)
-        volumeItem.view = box
-        menu.addItem(volumeItem)
-        menu.addItem(.separator())
-
-        let decor = NSMenuItem(title: "Decorations", action: nil, keyEquivalent: "")
-        let decorMenu = NSMenu()
-        let lights = NSMenuItem(title: "Christmas Lights", action: nil, keyEquivalent: "")
-        let lightsMenu = NSMenu()
-        for mode in DecorationSettings.LightMode.allCases {
-            let it = NSMenuItem(title: mode.displayName, action: #selector(setLights(_:)), keyEquivalent: "")
-            it.target = self
-            it.representedObject = mode.rawValue
-            it.state = mode == Settings.lights ? .on : .off
-            lightsMenu.addItem(it)
-            lightItems.append(it)
-        }
-        lights.submenu = lightsMenu
-        decorMenu.addItem(lights)
-        for (group, choice) in AppDelegate.decorChoices.enumerated() {
-            let parent = NSMenuItem(title: choice.title, action: nil, keyEquivalent: "")
-            let sub = NSMenu()
-            var items: [NSMenuItem] = []
-            let current = Settings.number(choice.key, choice.fallback)
-            for (i, option) in choice.options.enumerated() {
-                let it = NSMenuItem(title: option.0, action: #selector(setDecorChoice(_:)), keyEquivalent: "")
-                it.target = self
-                it.tag = group * 100 + i
-                it.state = option.1 == current ? .on : .off
-                sub.addItem(it)
-                items.append(it)
-            }
-            parent.submenu = sub
-            decorMenu.addItem(parent)
-            decorItems.append(items)
-        }
-        eventsItem = NSMenuItem(title: "Atmospheric Events", action: #selector(toggleEvents), keyEquivalent: "")
-        eventsItem.target = self
-        eventsItem.state = Settings.events ? .on : .off
-        decorMenu.addItem(eventsItem)
-        decorMenu.addItem(.separator())
-        let flyNow = NSMenuItem(title: "Fly Santa Now", action: #selector(flySantaNow), keyEquivalent: "")
-        flyNow.target = self
-        decorMenu.addItem(flyNow)
-        let eventNow = NSMenuItem(title: "Show an Event Now", action: #selector(showEventNow), keyEquivalent: "")
-        eventNow.target = self
-        decorMenu.addItem(eventNow)
-        decor.submenu = decorMenu
-        menu.addItem(decor)
-
-        // Play mode always starts off: snowballs are something you ask for, never a side effect
-        let playItem = NSMenuItem(title: "Play Mode (Snowballs)", action: #selector(togglePlay(_:)), keyEquivalent: "")
-        playItem.target = self
-        menu.addItem(playItem)
-
-        let clear = NSMenuItem(title: "Clear Snow", action: #selector(clearSnow), keyEquivalent: "c")
-        clear.target = self
-        menu.addItem(clear)
-
-        menu.addItem(.separator())
-        menu.addItem(NSMenuItem(title: "Quit", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        menu.delegate = self            // rebuilt each time it opens, so it always shows current settings
         statusItem.menu = menu
+    }
+
+    func menuNeedsUpdate(_ menu: NSMenu) {
+        menu.removeAllItems()
+        func item(_ title: String, _ action: Selector?, key: String = "", on: Bool = false, tag: Int = 0,
+                  object: Any? = nil) -> NSMenuItem {
+            let it = NSMenuItem(title: title, action: action, keyEquivalent: key)
+            it.target = self
+            it.state = on ? .on : .off
+            it.tag = tag
+            it.representedObject = object
+            return it
+        }
+        func submenu(_ title: String, _ items: [NSMenuItem]) -> NSMenuItem {
+            let parent = NSMenuItem(title: title, action: nil, keyEquivalent: "")
+            let sub = NSMenu()
+            for i in items { sub.addItem(i) }
+            parent.submenu = sub
+            return parent
+        }
+        let s = settings
+
+        menu.addItem(item(overlays.paused ? "Resume Snow" : "Pause Snow", #selector(togglePause), key: "p"))
+        if overlays.autoPaused {
+            let note = NSMenuItem(title: "Paused automatically (power settings)", action: nil, keyEquivalent: "")
+            note.isEnabled = false
+            menu.addItem(note)
+        }
+        menu.addItem(.separator())
+        menu.addItem(submenu("Theme", Theme.allCases.map { item($0.displayName, #selector(applyTheme(_:)), object: $0.rawValue) }))
+        for preset in SnowPreset.allCases {
+            menu.addItem(item(preset.displayName, #selector(setWeather(_:)), on: preset == s.weather, object: preset.rawValue))
+        }
+        menu.addItem(.separator())
+        menu.addItem(submenu("Cursor Effect", CursorPreset.allCases.map {
+            item($0.displayName, #selector(setCompanion(_:)), on: $0 == s.companion, object: $0.rawValue)
+        }))
+        menu.addItem(submenu("Cursor Trail", TrailStyle.allCases.map {
+            item($0.displayName, #selector(setTrail(_:)), on: $0 == s.trail, object: $0.rawValue)
+        }))
+        menu.addItem(submenu("Christmas Lights", LightMode.allCases.map {
+            item($0.displayName, #selector(setLights(_:)), on: $0 == s.lights, object: $0.rawValue)
+        }))
+        menu.addItem(item("Sleigh Bells", #selector(toggleBells), on: s.bells))
+        menu.addItem(item("Mute All Sound", #selector(toggleMute), key: "m", on: s.muted))
+        menu.addItem(.separator())
+        menu.addItem(item("Fly Santa Now", #selector(flySantaNow)))
+        menu.addItem(item("Show an Event Now", #selector(showEventNow)))
+        menu.addItem(item("Play Mode (Snowballs)", #selector(togglePlay), on: overlays.playMode))
+        menu.addItem(item("Clear Snow", #selector(clearSnow), key: "c"))
+        menu.addItem(.separator())
+        menu.addItem(item("Preferences…", #selector(showPreferences), key: ","))
+        menu.addItem(NSMenuItem(title: "Quit WinterIsComing", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
     }
 
     @objc func togglePause() {
         overlays.setPaused(!overlays.paused)
-        pauseItem.title = overlays.paused ? "Resume Snow" : "Pause Snow"
+        // Nothing steps while paused, so sound would otherwise hold its last level
+        if overlays.paused { audio.stop() }
     }
 
-    @objc func setPreset(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let preset = SnowPreset(rawValue: raw) else { return }
-        Settings.preset = preset
-        model.weather.setPreset(preset)           // eases over a few seconds
-        for it in presetItems { it.state = (it === sender) ? .on : .off }
+    @objc func applyTheme(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let theme = Theme(rawValue: raw) else { return }
+        settings = theme.apply(to: settings)
     }
 
-    @objc func toggleFront(_ sender: NSMenuItem) {
-        Settings.snowInFront.toggle()
-        model.snowInFront = Settings.snowInFront
-        sender.state = Settings.snowInFront ? .on : .off
+    @objc func setWeather(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let p = SnowPreset(rawValue: raw) else { return }
+        settings.weather = p
     }
 
-    @objc func toggleMelting(_ sender: NSMenuItem) {
-        Settings.melting.toggle()
-        model.melting = Settings.melting
-        sender.state = Settings.melting ? .on : .off
+    @objc func setCompanion(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let p = CursorPreset(rawValue: raw) else { return }
+        settings.companion = p
     }
 
-    @objc func setCursorStrength(_ sender: NSMenuItem) {
-        let strength = AppDelegate.cursorChoices[sender.tag].strength
-        Settings.cursorStrength = strength
-        model.cursorStrength = strength
-        for it in cursorItems { it.state = (it === sender) ? .on : .off }
-    }
-
-    /// Bells sound only when switched on, not muted, and a cursor effect is active.
-    /// Turning any of those off stops the audio engine at once.
-    func applySound() { model.soundOn = Settings.bells && !Settings.muted }
-
-    /// Push the decoration settings into the model
-    func applyDecor() {
-        model.decor.lights = Settings.lights
-        model.decor.lightBrightness = Settings.number("lightBrightness", 1)
-        model.decor.lightSpacing = Settings.number("lightSpacing", 26)
-        model.decor.frost = Settings.number("frost", 0)
-        model.director.flyoverGap = Settings.number("flyoverGap", 0)
-        model.director.eventsEnabled = Settings.events
+    @objc func setTrail(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let t = TrailStyle(rawValue: raw) else { return }
+        settings.trail = t
     }
 
     @objc func setLights(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let mode = DecorationSettings.LightMode(rawValue: raw) else { return }
-        Settings.lights = mode
-        applyDecor()
-        for it in lightItems { it.state = (it === sender) ? .on : .off }
+        guard let raw = sender.representedObject as? String, let m = LightMode(rawValue: raw) else { return }
+        settings.lights = m
     }
 
-    @objc func setDecorChoice(_ sender: NSMenuItem) {
-        let group = sender.tag / 100, index = sender.tag % 100
-        let choice = AppDelegate.decorChoices[group]
-        Settings.setNumber(choice.key, choice.options[index].1)
-        applyDecor()
-        for it in decorItems[group] { it.state = (it === sender) ? .on : .off }
-    }
-
-    @objc func toggleEvents() {
-        Settings.events.toggle()
-        eventsItem.state = Settings.events ? .on : .off
-        applyDecor()
-    }
-
-    private var eventCursor = 0
+    @objc func toggleBells() { settings.bells.toggle() }
+    @objc func toggleMute() { settings.muted.toggle() }
     @objc func flySantaNow() { model.startFlyover() }
-    /// Cycles through the atmospheric events, for checking how each looks
+
+    /// Cycles through the atmospheric events, for seeing how each looks
     @objc func showEventNow() {
         model.trigger(AtmosEvent.allCases[eventCursor % AtmosEvent.allCases.count])
         eventCursor += 1
     }
 
-    @objc func setCursorPreset(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String, let preset = CursorPreset(rawValue: raw) else { return }
-        Settings.cursorPreset = preset
-        model.cursorPreset = preset
-        applySound()
-        for it in effectItems { it.state = (it === sender) ? .on : .off }
-    }
-
-    @objc func setCompanionSize(_ sender: NSMenuItem) {
-        let size = AppDelegate.sizeChoices[sender.tag].size
-        Settings.companionSize = size
-        model.companionSize = size
-        for it in sizeItems { it.state = (it === sender) ? .on : .off }
-    }
-
-    @objc func toggleBells() {
-        Settings.bells.toggle()
-        bellsItem.state = Settings.bells ? .on : .off
-        applySound()
-    }
-
-    @objc func toggleMute() {
-        Settings.muted.toggle()
-        muteItem.state = Settings.muted ? .on : .off
-        applySound()
-    }
-
-    @objc func volumeChanged(_ sender: NSSlider) {
-        Settings.volume = sender.doubleValue
-        audio.volume = sender.doubleValue
-    }
-
-    @objc func togglePlay(_ sender: NSMenuItem) {
-        overlays.playMode.toggle()
-        sender.state = overlays.playMode ? .on : .off
-    }
-
+    @objc func togglePlay() { overlays.playMode.toggle() }
     @objc func clearSnow() { overlays.clearAll() }
+
+    @objc func showPreferences() {
+        if preferences == nil { preferences = PreferencesWindow(app: self) }
+        preferences?.show()
+    }
 }
