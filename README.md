@@ -54,6 +54,12 @@ zsh Scripts/bundle.sh          # builds WinterIsComing.app (release build, app i
 open WinterIsComing.app
 ```
 
+**Or download it** from [Releases](https://github.com/risshhabh/winter-is-coming/releases): unzip,
+move `WinterIsComing.app` to `/Applications` and open it. The app is not notarized, so macOS blocks
+the first launch: open System Settings → Privacy & Security, scroll down, click **Open Anyway** next
+to WinterIsComing, and confirm. (On macOS 14, right-click the app → Open does the same.) Building it
+yourself avoids this.
+
 To keep it, drag `WinterIsComing.app` into `/Applications`, open it from there, and tick
 **Preferences → General → Launch at login**.
 
@@ -165,7 +171,7 @@ touched) and prints timings and whether every overlay is click-through. `--audit
   its display.
 - **Launch at login** needs the bundled app (not `swift run`), ideally in `/Applications`.
 - **The app is ad-hoc signed.** macOS may ask for Accessibility again after you rebuild it, and the
-  first launch of a downloaded copy needs right-click → Open.
+  first launch of a downloaded copy must be allowed in System Settings → Privacy & Security → Open Anyway.
 
 ## Troubleshooting 🔧
 
@@ -177,7 +183,7 @@ touched) and prints timings and whether every overlay is click-through. `--audit
 | Fewer flakes than expected | Snow falls behind windows, so a maximized window hides most of it. Battery saver, Low Power Mode or the particle budget also thin it. |
 | No sound | Sound is off by default: Preferences → Audio. Check Mute all sound. Bells only ring while a cursor effect or trail is on, or during a flyover. |
 | Launch at login fails | Move the app to /Applications and try again; check System Settings → General → Login Items. |
-| "App is damaged" or won't open | Right-click → Open once, or rebuild with `zsh Scripts/bundle.sh`. |
+| "Apple could not verify…" or won't open | System Settings → Privacy & Security → Open Anyway. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/WinterIsComing.app`, or build it yourself with `zsh Scripts/bundle.sh`. |
 | Settings are wrong | Preferences → Restore Defaults, or `defaults delete local.winteriscoming` while the app is quit. |
 
 The full manual test checklist is in [docs/manual-tests.md](docs/manual-tests.md).
