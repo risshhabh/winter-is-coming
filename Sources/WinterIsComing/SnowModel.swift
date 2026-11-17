@@ -55,6 +55,17 @@ final class SnowModel {
     var soundOn = false { didSet { if !soundOn { silence() } } }
     private var bells = BellSequencer(variants: BellAudio.variants, seed: 0xBE11)
 
+    // Decorations and atmosphere
+    var decor = DecorationSettings()
+    var director = EventDirector(seed: 0xA7305)
+    /// The flyover sleigh reuses the cursor companion's motion and artwork, chasing a scripted point
+    private(set) var flyer = CursorCompanion()
+    private(set) var flyoverActive = false
+    private var flyPath = (x0: 0.0, x1: 0.0, y: 0.0, dir: 1.0, t: 0.0, bell: 0.0)
+    private var star: (x: Double, y: Double, vx: Double, vy: Double, left: Double)?
+    private var eventRNG = SeededRNG(seed: 0xE7E7)
+    private var stepBell: BellEvent?
+
     var melting = false
     var snowInFront = true
     /// 0 = the cursor leaves the snow alone, 1 = normal, 2 = strong
@@ -195,7 +206,10 @@ final class SnowModel {
             updateEnvironment()
         }
 
+        stepBell = nil
         updateCursor(dt)
+        updateAtmosphere(dt)
+        if soundOn, let audio = bellAudio { audio.update(dt: dt, shimmerGain: bells.shimmerGain, event: stepBell) }
         weather.step(dt: dt)
         let w = weather.effective
         // The wind changes over seconds; refreshing its grid 20 times a second is plenty
@@ -213,7 +227,9 @@ final class SnowModel {
 
         settleAcc += dt
         if settleAcc >= 1.0 / 15 {
-            surfaces.settle(dt: settleAcc, meltRate: melting ? SnowModel.meltRate : 0)
+            // Frost forms faster in heavier weather: about four minutes in a storm, ten in light snow
+            surfaces.settle(dt: settleAcc, meltRate: melting ? SnowModel.meltRate : 0,
+                            frostRate: decor.frost > 0 ? 0.003 * w.accumulation : 0)
             settleAcc = 0
         }
     }
@@ -239,7 +255,7 @@ final class SnowModel {
         companion = CursorCompanion()
         companionAlpha = 0
         trailDebt = 0
-        if cursorPreset == .none { silence() }
+        if cursorPreset == .none { bells.reset() }
     }
 
     private func silence() {
@@ -283,11 +299,106 @@ final class SnowModel {
                                  vx: emitVX * 0.12 + trailRNG.range(-22, 22), vy: emitVY * 0.12 + trailRNG.range(-22, 22))
             }
         }
-        if soundOn, let audio = bellAudio {
-            let b = surfaces.bounds
-            let pan = b.width > 0 ? (cursor.x - b.minX) / b.width * 2 - 1 : 0
-            let event = bells.step(dt: dt, speed: cursor.typing ? 0 : cursor.speed, pan: pan)
-            audio.update(dt: dt, shimmerGain: bells.shimmerGain, event: event)
+        if soundOn {
+            stepBell = bells.step(dt: dt, speed: cursor.typing ? 0 : cursor.speed, pan: pan(cursor.x))
+        }
+    }
+
+    private func pan(_ x: Double) -> Double {
+        let b = surfaces.bounds
+        return b.width > 0 ? (x - b.minX) / b.width * 2 - 1 : 0
+    }
+
+    // MARK: Atmosphere: flyovers and rare events
+
+    /// Send Santa across a display now (also used by the menu's "Fly Santa Now")
+    func startFlyover() {
+        guard !flyoverActive, !displays.isEmpty else { return }
+        let d = displays[Int(eventRNG.next() % UInt64(displays.count))].rect
+        let dir = eventRNG.unit() < 0.5 ? 1.0 : -1.0
+        // High in the sky, so it passes above most of what you are working on
+        flyPath = (dir > 0 ? d.minX - 140 : d.maxX + 140, dir > 0 ? d.maxX + 140 : d.minX - 140,
+                   d.minY + d.height * eventRNG.range(0.66, 0.86), dir, 0, 0.4)
+        flyer = CursorCompanion()
+        flyoverActive = true
+        director.hold(for: (d.width + 280) / 230 + 5, time: time)
+    }
+
+    private func updateAtmosphere(_ dt: Double) {
+        if !reduceMotion, let h = director.step(time: time) {
+            switch h {
+            case .flyover: startFlyover()
+            case .event(let e): trigger(e)
+            }
+        }
+
+        if flyoverActive {
+            flyPath.t += dt
+            let span = abs(flyPath.x1 - flyPath.x0)
+            let u = flyPath.t * 230 / span
+            let x = flyPath.x0 + (flyPath.x1 - flyPath.x0) * u
+            let y = flyPath.y + 46 * sin(u * .pi)                    // a shallow arc
+            flyer.update(dt: dt, cursorX: x, cursorY: y, offsetX: 0, offsetY: 0, stiffness: 9)
+            // The same trail as the cursor sleigh, carried by the same wind
+            if eventRNG.unit() < 16 * dt {
+                let r = eventRNG.unit()
+                powder.emitTrail(kind: r < 0.55 ? PowderSystem.sparkleKind : (r < 0.9 ? PowderSystem.trailFlakeKind : PowderSystem.glowKind),
+                                 x: flyer.x - flyPath.dir * 30 + eventRNG.range(-4, 4), y: flyer.y - 3 + eventRNG.range(-4, 4),
+                                 vx: flyer.vx * 0.1 + eventRNG.range(-18, 18), vy: eventRNG.range(-18, 18))
+            }
+            // Distant bells: quiet, irregular, panned to where the sleigh is
+            flyPath.bell -= dt
+            if soundOn, stepBell == nil, flyPath.bell <= 0 {
+                flyPath.bell = eventRNG.range(0.45, 0.95)
+                stepBell = BellEvent(variant: Int(eventRNG.next() % UInt64(BellAudio.variants)),
+                                     gain: eventRNG.range(0.18, 0.3), pan: max(-1, min(1, pan(flyer.x))))
+            }
+            if u >= 1 { flyoverActive = false }
+        }
+
+        if var s = star {
+            // A shooting star is just a fast point shedding glow: the streak is its fading trail
+            for _ in 0..<3 {
+                powder.emitTrail(kind: eventRNG.unit() < 0.6 ? PowderSystem.glowKind : PowderSystem.sparkleKind,
+                                 x: s.x + eventRNG.range(-1, 1), y: s.y + eventRNG.range(-1, 1), vx: s.vx * 0.02, vy: s.vy * 0.02)
+                s.x += s.vx * dt / 3
+                s.y += s.vy * dt / 3
+            }
+            s.left -= dt
+            star = s.left > 0 ? s : nil
+        }
+    }
+
+    /// Start one atmospheric event. Each acts through the weather, the wind or the particle system.
+    func trigger(_ e: AtmosEvent) {
+        guard !displays.isEmpty else { return }
+        let d = displays[Int(eventRNG.next() % UInt64(displays.count))].rect
+        switch e {
+        case .shootingStar:
+            let dir = eventRNG.unit() < 0.5 ? 1.0 : -1.0
+            star = (d.minX + d.width * eventRNG.range(0.25, 0.75), d.minY + d.height * eventRNG.range(0.78, 0.93),
+                    dir * eventRNG.range(900, 1300), -eventRNG.range(280, 480), eventRNG.range(0.35, 0.55))
+        case .gust:
+            weather.triggerGust()
+        case .intensity:
+            weather.shiftIntensity(eventRNG.unit() < 0.6 ? 0.45 : -0.35)
+        case .blownPowder:
+            let u = wind.sample(x: d.minX + d.width / 2, y: d.minY + d.height / 2).u
+            if !surfaces.blowPowder(windU: u, pick: Int(eventRNG.next() % 1000), powder: &powder, time: time) {
+                weather.triggerGust()
+            }
+        case .formation:
+            // A small six-armed figure of flakes and sparkles that hangs for a moment and drifts apart
+            let cx = d.minX + d.width * eventRNG.range(0.15, 0.85), cy = d.minY + d.height * eventRNG.range(0.55, 0.9)
+            powder.emitTrail(kind: PowderSystem.glowKind, x: cx, y: cy, vx: 0, vy: 0)
+            for arm in 0..<6 {
+                let a = Double(arm) * .pi / 3
+                for k in 1...4 {
+                    let r = Double(k) * 7
+                    powder.emitTrail(kind: k == 4 ? PowderSystem.sparkleKind : PowderSystem.trailFlakeKind,
+                                     x: cx + cos(a) * r, y: cy + sin(a) * r, vx: cos(a) * 5, vy: sin(a) * 5)
+                }
+            }
         }
     }
 

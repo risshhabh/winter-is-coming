@@ -39,6 +39,16 @@ enum Settings {
         get { d.object(forKey: "volume") == nil ? 0.5 : d.double(forKey: "volume") }
         set { d.set(newValue, forKey: "volume") }
     }
+    static func number(_ key: String, _ fallback: Double) -> Double { d.object(forKey: key) == nil ? fallback : d.double(forKey: key) }
+    static func setNumber(_ key: String, _ value: Double) { d.set(value, forKey: key) }
+    static var lights: DecorationSettings.LightMode {
+        get { DecorationSettings.LightMode(rawValue: d.string(forKey: "lights") ?? "") ?? .off }
+        set { d.set(newValue.rawValue, forKey: "lights") }
+    }
+    static var events: Bool {
+        get { d.bool(forKey: "events") }
+        set { d.set(newValue, forKey: "events") }
+    }
     /// How strongly the cursor stirs falling snow: 0 off, 1 normal
     static var cursorStrength: Double {
         get { d.object(forKey: "cursorStrength") == nil ? 1 : d.double(forKey: "cursorStrength") }
@@ -63,6 +73,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     var bellsItem: NSMenuItem!
     var muteItem: NSMenuItem!
     let audio = BellAudio()
+    /// Decoration choices that are a pick-one list: (menu title, settings key, default, options)
+    static let decorChoices: [(title: String, key: String, fallback: Double, options: [(String, Double)])] = [
+        ("Light Brightness", "lightBrightness", 1, [("Dim", 0.5), ("Normal", 1), ("Bright", 1.4)]),
+        ("Light Density", "lightSpacing", 26, [("Sparse", 38), ("Normal", 26), ("Dense", 18)]),
+        ("Window Frost", "frost", 0, [("Off", 0), ("Light", 0.6), ("Heavy", 1)]),
+        ("Santa Flyovers", "flyoverGap", 0, [("Off", 0), ("Rare (about hourly)", 3600), ("Sometimes (about every 20 min)", 1200), ("Often (about every 5 min)", 300)]),
+    ]
+    var lightItems: [NSMenuItem] = []
+    var decorItems: [[NSMenuItem]] = []
+    var eventsItem: NSMenuItem!
     /// Smoke test: run for this many seconds, print statistics and quit. No permission prompt.
     var smokeSeconds: Double?
     var smokePreset: CursorPreset?
@@ -82,6 +102,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         model.bellAudio = audio
         audio.volume = Settings.volume
         applySound()
+        applyDecor()
         overlays = OverlayController(model: model)
 
         setupMenu()
@@ -201,6 +222,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(volumeItem)
         menu.addItem(.separator())
 
+        let decor = NSMenuItem(title: "Decorations", action: nil, keyEquivalent: "")
+        let decorMenu = NSMenu()
+        let lights = NSMenuItem(title: "Christmas Lights", action: nil, keyEquivalent: "")
+        let lightsMenu = NSMenu()
+        for mode in DecorationSettings.LightMode.allCases {
+            let it = NSMenuItem(title: mode.displayName, action: #selector(setLights(_:)), keyEquivalent: "")
+            it.target = self
+            it.representedObject = mode.rawValue
+            it.state = mode == Settings.lights ? .on : .off
+            lightsMenu.addItem(it)
+            lightItems.append(it)
+        }
+        lights.submenu = lightsMenu
+        decorMenu.addItem(lights)
+        for (group, choice) in AppDelegate.decorChoices.enumerated() {
+            let parent = NSMenuItem(title: choice.title, action: nil, keyEquivalent: "")
+            let sub = NSMenu()
+            var items: [NSMenuItem] = []
+            let current = Settings.number(choice.key, choice.fallback)
+            for (i, option) in choice.options.enumerated() {
+                let it = NSMenuItem(title: option.0, action: #selector(setDecorChoice(_:)), keyEquivalent: "")
+                it.target = self
+                it.tag = group * 100 + i
+                it.state = option.1 == current ? .on : .off
+                sub.addItem(it)
+                items.append(it)
+            }
+            parent.submenu = sub
+            decorMenu.addItem(parent)
+            decorItems.append(items)
+        }
+        eventsItem = NSMenuItem(title: "Atmospheric Events", action: #selector(toggleEvents), keyEquivalent: "")
+        eventsItem.target = self
+        eventsItem.state = Settings.events ? .on : .off
+        decorMenu.addItem(eventsItem)
+        decorMenu.addItem(.separator())
+        let flyNow = NSMenuItem(title: "Fly Santa Now", action: #selector(flySantaNow), keyEquivalent: "")
+        flyNow.target = self
+        decorMenu.addItem(flyNow)
+        let eventNow = NSMenuItem(title: "Show an Event Now", action: #selector(showEventNow), keyEquivalent: "")
+        eventNow.target = self
+        decorMenu.addItem(eventNow)
+        decor.submenu = decorMenu
+        menu.addItem(decor)
+
         // Play mode always starts off: snowballs are something you ask for, never a side effect
         let playItem = NSMenuItem(title: "Play Mode (Snowballs)", action: #selector(togglePlay(_:)), keyEquivalent: "")
         playItem.target = self
@@ -248,7 +314,46 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Bells sound only when switched on, not muted, and a cursor effect is active.
     /// Turning any of those off stops the audio engine at once.
-    func applySound() { model.soundOn = Settings.bells && !Settings.muted && Settings.cursorPreset != .none }
+    func applySound() { model.soundOn = Settings.bells && !Settings.muted }
+
+    /// Push the decoration settings into the model
+    func applyDecor() {
+        model.decor.lights = Settings.lights
+        model.decor.lightBrightness = Settings.number("lightBrightness", 1)
+        model.decor.lightSpacing = Settings.number("lightSpacing", 26)
+        model.decor.frost = Settings.number("frost", 0)
+        model.director.flyoverGap = Settings.number("flyoverGap", 0)
+        model.director.eventsEnabled = Settings.events
+    }
+
+    @objc func setLights(_ sender: NSMenuItem) {
+        guard let raw = sender.representedObject as? String, let mode = DecorationSettings.LightMode(rawValue: raw) else { return }
+        Settings.lights = mode
+        applyDecor()
+        for it in lightItems { it.state = (it === sender) ? .on : .off }
+    }
+
+    @objc func setDecorChoice(_ sender: NSMenuItem) {
+        let group = sender.tag / 100, index = sender.tag % 100
+        let choice = AppDelegate.decorChoices[group]
+        Settings.setNumber(choice.key, choice.options[index].1)
+        applyDecor()
+        for it in decorItems[group] { it.state = (it === sender) ? .on : .off }
+    }
+
+    @objc func toggleEvents() {
+        Settings.events.toggle()
+        eventsItem.state = Settings.events ? .on : .off
+        applyDecor()
+    }
+
+    private var eventCursor = 0
+    @objc func flySantaNow() { model.startFlyover() }
+    /// Cycles through the atmospheric events, for checking how each looks
+    @objc func showEventNow() {
+        model.trigger(AtmosEvent.allCases[eventCursor % AtmosEvent.allCases.count])
+        eventCursor += 1
+    }
 
     @objc func setCursorPreset(_ sender: NSMenuItem) {
         guard let raw = sender.representedObject as? String, let preset = CursorPreset(rawValue: raw) else { return }

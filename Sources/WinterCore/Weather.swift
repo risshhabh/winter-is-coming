@@ -69,6 +69,10 @@ public struct Weather {
     /// Calm mode (Reduce Motion): little wind, no gusts, sparser snow
     public var calm = false
     private var calmBlend = 0.0
+    /// A passing gust (atmospheric event): 1 at its peak, gone within seconds
+    public private(set) var gustBoost = 0.0
+    /// A spell of heavier or lighter snow (atmospheric event): eases back over about a minute
+    public private(set) var intensityShift = 0.0
     public let seed: UInt64
 
     public init(preset: SnowPreset, seed: UInt64) {
@@ -82,8 +86,15 @@ public struct Weather {
         if immediate { current = .preset(p) }
     }
 
+    /// A brief gust sweeps through
+    public mutating func triggerGust() { gustBoost = 1 }
+    /// The snowfall thickens (positive) or thins (negative) for a while
+    public mutating func shiftIntensity(_ amount: Double) { intensityShift = max(-0.4, min(0.5, amount)) }
+
     public mutating func step(dt: Double) {
         time += dt
+        gustBoost *= exp(-dt / 2.5)
+        intensityShift *= exp(-dt / 45)
         let k = 1 - exp(-dt / transitionTau)
         current = .lerp(current, .preset(preset), k)
         calmBlend += ((calm ? 1 : 0) - calmBlend) * k
@@ -91,7 +102,7 @@ public struct Weather {
 
     /// Slow drift of overall intensity, about ±30% over a few minutes
     public var intensity: Double {
-        1 + 0.22 * Noise.value1(time / 95, seed: seed) + 0.09 * Noise.value1(time / 31, seed: seed ^ 0x11)
+        1 + 0.22 * Noise.value1(time / 95, seed: seed) + 0.09 * Noise.value1(time / 31, seed: seed ^ 0x11) + intensityShift
     }
 
     /// Prevailing wind direction and strength in -1...1; turns around slowly and passes through calm
@@ -107,6 +118,9 @@ public struct Weather {
         p.windMean *= 1 - 0.7 * calmBlend
         p.turbulence *= 1 - 0.7 * calmBlend
         p.gust *= 1 - calmBlend
+        p.windMean *= 1 + 1.2 * gustBoost
+        p.turbulence *= 1 + 0.8 * gustBoost
+        p.gust = p.gust * (1 + 1.5 * gustBoost) + 25 * gustBoost * (1 - calmBlend)
         return p
     }
 

@@ -22,6 +22,9 @@ Snow falls on your desktop, drifts on the wind and piles up on your windows and 
 - 🖱️ **Clicks always pass through**. The cursor stirs nearby flakes, more the faster it moves, and you choose how much (or turn it off)
 - 🎅 **Festive cursor** (optional): a little Santa sleigh pulled by two galloping reindeer follows your cursor, or a Santa hat perches on it, or it just leaves a trail of snowflakes or golden sparkles
 - 🔔 **Sleigh bells** (off until you turn them on): a faint shimmer while the cursor moves and the occasional bell on a fast sweep, all synthesized in code
+- 💡 **Christmas lights** (optional): warm white or multicolored strings under the menu bar and along the front window, twinkling gently and glowing on the snow beside them
+- 🧊 **Window frost** (optional): branching frost creeps into the corners of windows that sit still, faster in heavy weather
+- 🛷 **Santa flyovers and rare events** (optional): now and then a sleigh crosses the sky, a shooting star streaks past, a gust blows through or powder lifts off a snowy window
 - ⛄ **Play Mode** (off until you turn it on): roll snowballs out of the snow, push them, carry them, and stack three into a snowman
 
 ## Try it 🚀
@@ -51,6 +54,7 @@ Use the ❄︎ in the menu bar to pause, pick the weather, turn melting or Play 
 | Cursor Effect | Normal Cursor, Santa Sleigh, Santa Hat, Snowflake Trail or Golden Sparkle Trail |
 | Companion Size | Small, Medium or Large |
 | Sleigh Bells, Mute, Volume | Movement-driven bells. Off by default; Mute and switching the effect off silence it at once |
+| Decorations | Christmas Lights (off, warm, multicolored), brightness and density; Window Frost; Santa Flyovers frequency; Atmospheric Events; and two "now" items for trying them out |
 | Play Mode (Snowballs) | Hover over snow and move sideways to roll a snowball; hold the mouse button to carry it. Always off at launch |
 
 ## How it is put together 🧩
@@ -66,15 +70,16 @@ Sources/WinterCore/        the simulation; no AppKit or SpriteKit, fully unit-te
   QualityGovernor            thins the snowfall when frames get expensive
   CursorCompanion            how the sleigh or hat chases the cursor: spring, facing, tilt, gallop, idle
   BellSequencer, BellSynth   when a bell rings and how loud; the synthesized bell sounds
+  Atmosphere                 EventDirector (what rare thing happens when) and light-string layout and twinkle
 Sources/WinterIsComing/    the app
   SnowModel                  the one shared winter: fixed-step loop, window polling, per-display flakes
   OverlayController          one click-through overlay per display, kept in step with the display list
   SnowScene                  mirrors one display's part of the model into SpriteKit
   Render/                    procedural textures, particle sprites, the pile shader
   Play/                      snowballs and snowmen
-  Festive/                   CursorTracker, FestiveArt, CompanionRenderer, BellAudio (one job each)
+  Festive/                   CursorTracker, FestiveArt, CompanionRenderer, BellAudio, Decorations (lights, frost)
   WindowSource, DockTracker  where the windows and the Dock are
-Tests/WinterCoreTests/     67 tests: wind, accumulation, particles, window motion, Dock, displays, cursor, festive, cost
+Tests/WinterCoreTests/     73 tests: wind, accumulation, particles, window motion, Dock, displays, cursor, festive, atmosphere, cost
 ```
 
 Run the tests with `swift test`.
@@ -85,11 +90,12 @@ Run the tests with `swift test`.
 .build/release/WinterIsComing --snapshot out.png --preset storm --seconds 300
 ```
 
-This runs the real model headlessly over a stand-in desktop and writes a PNG. Add `--light` for a light desktop, `--displays 2` for a second display, `--motion shake|jerk|slow|still` to choose what happens to one window just before the picture, `--lead 1.1` to take the picture later, `--melt` to turn melting on, and `--cursor sleigh|hat|snowTrail|goldTrail` to add a scripted cursor with that effect (`--rest` leaves it standing still, `--size 1.35` makes it large).
+This runs the real model headlessly over a stand-in desktop and writes a PNG. Add `--light` for a light desktop, `--displays 2` for a second display, `--motion shake|jerk|slow|still` to choose what happens to one window just before the picture, `--lead 1.1` to take the picture later, `--melt` to turn melting on, and `--cursor sleigh|hat|snowTrail|goldTrail` to add a scripted cursor with that effect (`--rest` leaves it standing still, `--size 1.35` makes it large). `--lights warm|multi`, `--frost`, `--flyover` and `--events` add the decorations.
 
 ## What macOS does not let it do 🚧
 
 - **The system cursor cannot be replaced** for other apps: every app sets its own cursor, and the public API only applies inside your own windows. So the sleigh and hat are companions drawn in the click-through overlay beside the real pointer, which keeps its arrow, I-beam and hand shapes. The companion trails the pointer by design, and sits behind it so it never covers the tip.
+- **Everything is drawn in one layer above your windows**, so flyovers, shooting stars and frost pass in front of window content, not behind it. They are kept small, high up or in corners for that reason.
 - **The overlay is below the menu bar and Dock**, so the companion slides under them when the cursor goes there.
 - **Typing is detected only as "a key was pressed recently"** (no key contents, no permission needed); the companion fades back and bells pause for a moment after each key press.
 

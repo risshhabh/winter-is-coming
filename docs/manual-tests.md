@@ -136,3 +136,53 @@ plays the eight bell variants in turn, then the shimmer swelling and fading, and
 - [ ] Play music in another app: it is not ducked, paused or rerouted.
 - [ ] Typing produces no bells, even if the cursor is nudged.
 - [ ] Reduce Motion on: no companion, no trail, no bells.
+
+## Decorations and atmosphere (menu → Decorations)
+
+Everything here is off by default. "Fly Santa Now" and "Show an Event Now" trigger things on demand
+so you do not have to wait for them.
+
+### Christmas lights
+
+- [ ] Warm White and Multicolored: a string hangs just under the menu bar on every display, and another along the top of the frontmost window.
+- [ ] Bulbs twinkle slowly and independently. Nothing blinks in unison or flashes.
+- [ ] Each bulb has a soft glow that tints the snow piled next to it.
+- [ ] The wire sags between pins and stirs slightly; more in a Snowstorm.
+- [ ] Drag the front window: its lights move with it. Bring another window forward: the string moves to that one.
+- [ ] The window string starts to the right of the close/minimize/zoom buttons and hangs no more than a few points into the title bar.
+- [ ] Click the window's controls, toolbar and tabs under the lights: every click lands.
+- [ ] Light Brightness (Dim, Normal, Bright) and Light Density (Sparse, Normal, Dense) change at once. Off removes them at once.
+
+### Window frost
+
+- [ ] Light or Heavy: over a few minutes, branching frost creeps out of the bottom corners of windows that are sitting still. Faster in a Snowstorm.
+- [ ] It stays within the corners, is fainter on the window you are using, and never covers the middle of a window.
+- [ ] Shake a window hard: its frost is knocked back along with its snow.
+- [ ] Gradual Melting on: frost thaws back to a thin rim.
+- [ ] Frost in a corner covered by another window is not drawn on top of that window.
+- [ ] Light mode: frost is visible on white windows.
+
+### Santa flyovers
+
+- [ ] Fly Santa Now: the sleigh crosses one display high up in a shallow arc, reindeer galloping, in about ten seconds.
+- [ ] It leaves a thin trail of sparkles and flakes that drifts with the wind and fades.
+- [ ] With Sleigh Bells on: a few faint, irregular bells, panned to where the sleigh is. With bells off: silent.
+- [ ] You can keep typing and clicking while it passes; it never takes focus.
+- [ ] With two displays, repeat a few times: it appears on either, correctly placed.
+- [ ] Santa Flyovers → Often: one appears roughly every five minutes. Off: none.
+
+### Atmospheric events
+
+Use Show an Event Now repeatedly; it cycles through them in this order.
+
+- [ ] Shooting star: a short golden streak high in the sky, gone in about a second.
+- [ ] Wind gust: the snow visibly leans and speeds up for a few seconds, then settles.
+- [ ] Snowflake formation: a small six-armed figure of flakes and sparkles that drifts apart.
+- [ ] Snow intensity: the snowfall thickens or thins over the next minute.
+- [ ] Wind-blown powder: a puff of powder lifts off a snowy window top or the ground and blows downwind.
+- [ ] With Atmospheric Events on and left alone, something happens only every few minutes, never two at once.
+- [ ] Reduce Motion on: no flyovers and no events.
+
+### All together
+
+- [ ] Snowstorm, Multicolored lights, Heavy frost, Santa Sleigh cursor, bells on: it reads as one scene, not competing effects. Nothing is so bright or busy that you would turn it off to work.

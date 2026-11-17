@@ -45,6 +45,7 @@ final class ScriptedWindowSource: WindowSource {
 ///   WinterIsComing --snapshot out.png [--preset storm] [--seconds 240] [--light] [--melt]
 ///                  [--motion shake|jerk|slow|still] [--lead 1.2] [--displays 2] [--corner 16]
 ///                  [--cursor sleigh|hat|snowTrail|goldTrail] [--size 1.35] [--rest]
+///                  [--lights warm|multi] [--frost] [--flyover] [--events]
 enum Snapshot {
     static func run(_ args: [String]) -> Int32 {
         func value(_ flag: String) -> String? {
@@ -76,6 +77,10 @@ enum Snapshot {
         model.forceLightBackground = light
         model.melting = args.contains("--melt")
         model.setDock(Rect(x: 400, y: 0, width: 480, height: 62))
+        if let mode = DecorationSettings.LightMode(rawValue: value("--lights") ?? "") { model.decor.lights = mode }
+        if args.contains("--frost") { model.decor.frost = 1 }
+        model.director.eventsEnabled = false
+        let showFlyover = args.contains("--flyover"), showEvents = args.contains("--events")
         if let preset = CursorPreset(rawValue: value("--cursor") ?? "") {
             // A cursor sweeping left to right in a shallow arc over the last three seconds,
             // or (with --rest) arriving and then sitting still
@@ -91,6 +96,9 @@ enum Snapshot {
         let steps = Int(seconds * 60)
         for i in 0..<steps {
             source.time = Double(i) / 60
+            if showFlyover, i == steps - 240 { model.startFlyover() }
+            if showEvents, i == steps - 14 { model.trigger(.shootingStar) }
+            if showEvents, i == steps - 30 { model.trigger(.formation) }
             model.advance(by: SnowModel.stepDt)
         }
 

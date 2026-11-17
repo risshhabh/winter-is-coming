@@ -21,6 +21,8 @@ public final class Surface {
     var kin = WindowKinematics()
     var slideCarry = 0.0
     var vanishedAt = 0.0
+    /// How frosted the window's corners are, 0...1. Grows while the window sits still in the cold.
+    public internal(set) var frost = 0.0
 
     /// Bumped each time the window shakes snow off; Play mode uses it to knock snowballs loose
     public internal(set) var shedSerial = 0
@@ -329,6 +331,7 @@ public final class SurfaceManager {
     }
 
     private func shed(_ s: Surface, fraction: Double, vx: Double, vy: Double, powder: inout PowderSystem, time: Double) {
+        if fraction > 0.3 { s.frost *= 0.5 }                 // a good shake cracks the frost off too
         if fraction > 0.02 {
             s.shedSerial += 1
             s.lastShedFraction = fraction
@@ -350,9 +353,17 @@ public final class SurfaceManager {
     // MARK: Slow processes
 
     /// Slumping and optional melting; call a few times a second. `meltRate` is px of height per second.
-    public func settle(dt: Double, meltRate: Double) {
+    /// `frostRate` is frost growth per second (0 = frost off); it should follow the weather.
+    public func settle(dt: Double, meltRate: Double, frostRate: Double = 0) {
         let dh = meltRate * dt
+        // With melting on, frost thaws back to a thin rim instead of covering the corner
+        let frostCap = meltRate > 0 ? 0.4 : 1.0
         for s in windows {
+            if frostRate > 0 {
+                s.frost = s.frost < frostCap ? min(frostCap, s.frost + frostRate * dt) : max(frostCap, s.frost - 0.004 * dt)
+            } else {
+                s.frost = max(0, s.frost - 0.02 * dt)
+            }
             s.field.relax()
             if dh > 0 { s.field.melt(dh) }
         }
@@ -367,8 +378,19 @@ public final class SurfaceManager {
         }
     }
 
+    /// The wind lifts a little loose snow off one pile (atmospheric event). Returns false if there was
+    /// nothing worth lifting.
+    public func blowPowder(windU: Double, pick: Int, powder: inout PowderSystem, time: Double) -> Bool {
+        var candidates = windows.filter { $0.field.area > 150 }
+        candidates.append(contentsOf: grounds.filter { $0.field.area > 150 })
+        guard !candidates.isEmpty else { return false }
+        let s = candidates[abs(pick) % candidates.count]
+        shed(s, fraction: 0.05, vx: windU * 2.5 + (windU < 0 ? -60 : 60), vy: 25, powder: &powder, time: time)
+        return true
+    }
+
     public func clearAll() {
-        for s in byID.values { s.field.clear() }
+        for s in byID.values { s.field.clear(); s.frost = 0 }
         for g in grounds { g.field.clear() }
         dock?.field.clear()
     }
